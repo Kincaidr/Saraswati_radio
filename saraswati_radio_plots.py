@@ -110,7 +110,7 @@ def smearing(folder_path,cluster_name,radio_catalog,cluster_centre):
 
 
     
-    position=SkyCoord(ra, dec, frame='icrs',unit=(u.deg,u.deg))
+    cluster_centre=SkyCoord(str(354.4195 ), str(0.27909), frame='icrs',unit=(u.deg,u.deg))
 
 
     distance= np.abs(cluster_centre.separation(position))
@@ -1855,8 +1855,9 @@ def completness(simulation_path,radio_catalogue_fits):
 
 
 
-def source_counts(radio_catalogue_fits):
+def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
 
+    COSMOS_cat=Table.read(COSMOS_catalogue_fits)
 
     real_cat=Table.read(radio_catalogue_fits)
 
@@ -1880,7 +1881,6 @@ def source_counts(radio_catalogue_fits):
     
     bins=[]
 
-  
     for i in range(number_bins):
 
         sources=real_cat['Total_flux'][number_per_bin*i:np.min([number_per_bin*(i+1),len(real_cat)])]
@@ -1891,8 +1891,7 @@ def source_counts(radio_catalogue_fits):
 
         bin_width=abs(sources.max()-sources.min())
 
-        bins.append(bin_width)
-
+        bins.append(bin_width/2)
         source_tot1=source_tot0/bin_width
     
         source_tot2=source_tot1/((1.5)*(np.pi/180)**2)
@@ -1903,10 +1902,12 @@ def source_counts(radio_catalogue_fits):
 
     x=np.array(bins)
     y=np.array(source_totn)
-    plt.scatter(x*10**3, y,color='blue')
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.show()
+
+    import IPython;IPython.embed()
+    cluster_centre=SkyCoord(str(354.4195 ), str(0.2790), frame='icrs',unit=(u.deg,u.deg))
+
+    mask_COSMOS=(np.sqrt((COSMOS_cat['ra']-cluster_centre.ra)**2+(COSMOS_cat['dec']- cluster_centre.dec)**2) <0.3)
+
 
     for int in range(len(intervals)-1):
         try:
@@ -1960,6 +1961,9 @@ def source_counts(radio_catalogue_fits):
     print('source count length is',len(np.nancumsum(source_totl)))
     plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, source_totl,color='blue')
     plt.scatter(((intervals1[:-1]+intervals1[1:])/2)*10**3, source_totu,color='blue')
+    plt.scatter(x*10**3, y,color='blue')
+    plt.xscale('log')
+    plt.yscale('log')
     plt.scatter(S_TLA, N_TLA,marker='x')
     plt.xscale('log')
     plt.yscale('log')

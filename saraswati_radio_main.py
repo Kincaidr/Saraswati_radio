@@ -137,7 +137,7 @@ def  plotting_scripts(output_path,fits_files,simulation_path,cluster_name,radio_
     #simulation(cluster_name,simulation_path,radio_catalogue_fits,fits_image,res_image,rms_image)
     #simulation_catalog(simulation_path)
     #completness(simulation_path,radio_catalogue_fits)
-    source_counts(radio_catalogue_fits)
+    source_counts(radio_catalogue_fits,COSMOS_catalogue_fits)
 
 def  plotting_combine_scripts(output_path,combined_MeerKAT_cat,combined_MeerKAT_NVSS_cat,combined_MeerKAT_FIRST_cat,combined_MeerKAT_VLASS_cat,combined_VLASS_cat,combined_NVSS_cat,fits_image_A2631,fits_image_Zwcl2341):
     
