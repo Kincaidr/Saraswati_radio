@@ -1881,32 +1881,61 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
     
     bins=[]
 
-    for i in range(number_bins):
+    # for i in range(number_bins):
 
-        sources=real_cat['Total_flux'][number_per_bin*i:np.min([number_per_bin*(i+1),len(real_cat)])]
+    #     sources=real_cat['Total_flux'][number_per_bin*i:np.min([number_per_bin*(i+1),len(real_cat)])]
 
-        mean_flux=np.mean(sources)
+    #     mean_flux=np.mean(sources)
 
-        source_tot0=len(sources)
+    #     source_tot0=len(sources)
 
-        bin_width=abs(sources.max()-sources.min())
+    #     bin_width=abs(sources.max()-sources.min())
 
-        bins.append(bin_width/2)
-        source_tot1=source_tot0/bin_width
+    #     bins.append(bin_width/2)
+    #     source_tot1=source_tot0/bin_width
     
-        source_tot2=source_tot1/((1.5)*(np.pi/180)**2)
+    #     source_tot2=source_tot1/((1.5)*(np.pi/180)**2)
 
-        source_norm=source_tot2/mean_flux**(-2.5)
+    #     source_norm=source_tot2/mean_flux**(-2.5)
          
-        source_totn.append(source_norm)
+    #     source_totn.append(source_norm)
 
-    x=np.array(bins)
-    y=np.array(source_totn)
+    # x=np.array(bins)
+    # y=np.array(source_totn)
 
-    import IPython;IPython.embed()
-    cluster_centre=SkyCoord(str(354.4195 ), str(0.2790), frame='icrs',unit=(u.deg,u.deg))
+ 
 
-    mask_COSMOS=(np.sqrt((COSMOS_cat['ra']-cluster_centre.ra)**2+(COSMOS_cat['dec']- cluster_centre.dec)**2) <0.3)
+    cluster_centre=SkyCoord(str(150 ), str(2.3), frame='icrs',unit=(u.deg,u.deg))
+
+    mask_COSMOS=np.sqrt((COSMOS_cat['ra']-cluster_centre.ra.value)**2+(COSMOS_cat['dec']- cluster_centre.dec.value)**2) <=0.3
+
+    COSMOS_cat=COSMOS_cat[mask_COSMOS]
+
+    COSMOS_flux=COSMOS_cat['flux']*10**-6
+
+    cosmos_source_tot=[]
+
+    for int in range(len(intervals)-1):
+        try:
+            mask_real = (intervals[int] < COSMOS_flux) & (COSMOS_flux < intervals[int+1])
+
+            mean_flux=np.mean(COSMOS_flux[mask_real])
+
+            source_tot0=np.sum(mask_real)
+
+            source_tot1=source_tot0/ (intervals[int+1]- intervals[int])
+
+            source_tot2=source_tot1/((0.6)*(np.pi/180)**2)
+
+            source_norm=source_tot2/mean_flux**(-2.5)
+         
+            cosmos_source_tot.append(source_norm)
+            
+        except FloatingPointError:
+            print('interval is ',intervals[int],intervals[int+1])
+            source_totl.append(np.nan)
+
+
 
 
     for int in range(len(intervals)-1):
@@ -1954,17 +1983,17 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
             print('interval is ',intervals[int],intervals[int+1])
             source_totu.append(np.nan)
 
+    #import IPython;IPython.embed()
 
     S_TLA=[0.242,0.284,0.333,0.391,0.460,0.540,0.634,0.745,0.875,1.10,1.49,2.00,2.70,3.65,4.92,6.63,9.70,15.41,24.36,38.61,61.20,97,153.7,243.6,737]
     N_TLA=[12.49,12.26,14.33,15.48,15.24,15.72,15.73,18.37,18.88,22.55,25.58,28.09,31.61,41.89,52.37,58.26,82.08,168.5,215.2,215.1,325.8,520,908,1164.3,1751.2]
     print('interval length is',len(((intervals[:-1]+intervals[1:])/2)))
     print('source count length is',len(np.nancumsum(source_totl)))
     plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, source_totl,color='blue')
-    plt.scatter(((intervals1[:-1]+intervals1[1:])/2)*10**3, source_totu,color='blue')
-    plt.scatter(x*10**3, y,color='blue')
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.scatter(S_TLA, N_TLA,marker='x')
+    plt.scatter(((intervals1[:-1]+intervals1[1:])/2)*10**3, source_totu,color='blue',label='1283 MHz MeerKAT')
+    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, cosmos_source_tot,color='red',label='1.4GHz COSMOS wall')
+    # plt.scatter(x*10**3, y,color='blue')
+    plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT')
     plt.xscale('log')
     plt.yscale('log')
     ax.set_ylabel(r'$S^{2.5}\; dN/dS [Jy^{-1}]$',fontsize=15)
