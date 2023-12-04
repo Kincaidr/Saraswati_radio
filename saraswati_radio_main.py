@@ -21,7 +21,7 @@ def zwcl_main( argv ):
 
     radio_catalogue_fits = fits_files+cluster_name+'_srl.fits'
    
-    x=5
+    x=7
     radio_optical_catalogue_fits = fits.open(fits_files+cluster_name+'_DeCALS_radio_join.fits')
     radio_optical_catalog=radio_optical_catalogue_fits[1].data
 
