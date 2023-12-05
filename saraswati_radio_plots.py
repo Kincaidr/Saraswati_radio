@@ -1865,14 +1865,14 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
 
 
     intervals=np.logspace(-5,-2,50)
-    intervals1=np.logspace(-2,4,50)
+    intervals1=np.logspace(-2,4,30)
 
     #intervals_sparce=np.logspace(-6,5,20)
 
     source_totl=[]
     fig, ax = plt.subplots(1, 1, figsize=(6,6))
 
-    number_bins=30
+    number_bins=50
     number_sources=len(flux_real)
 
     number_per_bin= np.int32(np.ceil(number_sources/number_bins))
@@ -1881,9 +1881,8 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
     
     bins=[]
 
-    prev_max=flux_real[0]
 
-    for i in range(number_bins):
+    for i in range(number_bins-2):
 
         sources=flux_real[number_per_bin*i:np.min([number_per_bin*(i+1),len(real_cat)])]
 
@@ -1893,13 +1892,12 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
 
         source_tot0=len(sources)
 
-        bin_width=sources[-1]-prev_max
+        prev_max= np.mean(np.array(flux_real[number_per_bin*(i+2)-(number_per_bin+1)],flux_real[number_per_bin*(i+1)]))
 
-        prev_max= np.mean(flux_real[number_per_bin*(i+1)-1:number_per_bin*(i-1)+1])
+        bin_width=prev_max-flux_real[number_per_bin*(i)-(number_per_bin+1)]
 
-        print(prev_max)
+        bins.append(prev_max)
 
-        bins.append(bin_width/2)
         source_tot1=source_tot0/bin_width
     
         source_tot2=source_tot1/((1.5)*(np.pi/180)**2)
@@ -1910,8 +1908,9 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
 
     x=np.array(bins)
     y=np.array(source_totn)
+   
 
-    import IPython;IPython.embed()
+   # import IPython;IPython.embed()
 
     cluster_centre=SkyCoord(str(150 ), str(2.3), frame='icrs',unit=(u.deg,u.deg))
 
@@ -1998,8 +1997,9 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
     print('interval length is',len(((intervals[:-1]+intervals[1:])/2)))
     print('source count length is',len(np.nancumsum(source_totl)))
     plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, source_totl,color='blue')
-    plt.scatter(((intervals1[:-1]+intervals1[1:])/2)*10**3, source_totu,color='blue',label='1283 MHz MeerKAT')
-    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, cosmos_source_tot,color='red',label='1.4GHz COSMOS wall')
+    plt.scatter(((intervals1[:-1]+intervals1[1:])/2)*10**3, source_totu,color='blue',label='1283 MHz MeerKAT equal bin width')
+    #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, cosmos_source_tot,color='red',label='1.4GHz COSMOS wall')
+    plt.scatter(x*10**3, y,color='orange',label='1283 MHz MeerKAT same no sources per bin')
     # plt.scatter(x*10**3, y,color='blue')
     plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT')
     plt.xscale('log')
