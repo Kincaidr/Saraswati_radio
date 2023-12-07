@@ -1857,156 +1857,134 @@ def completness(simulation_path,radio_catalogue_fits):
 
 def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
 
+
+
+    def fixed_source_perbin(flux,number_bins,survey_area):
+         
+        
+        number_sources=len(flux)
+
+        number_per_bin= np.int32(np.ceil(number_sources/number_bins))
+
+        counts=[]
+
+        bins=[]
+
+        for i in range(number_bins-2):
+
+            sources=flux[number_per_bin*i:np.min([number_per_bin*(i+1),len(flux)])]
+
+            print('length',len(sources))
+
+            mean_flux=np.mean(sources)
+
+            source_tot0=len(sources)
+        
+
+            prev_max= np.mean(np.array(flux[number_per_bin*(i+2)-(number_per_bin)],flux[number_per_bin*(i+1)]))
+
+            bin_width=prev_max-flux[number_per_bin*(i)-(number_per_bin)]
+
+            bins.append(prev_max)
+
+            source_tot1=source_tot0/bin_width
+        
+            source_tot2=source_tot1/((survey_area)*(np.pi/180)**2)
+
+            source_norm=source_tot2/mean_flux**(-2.5)
+
+            print(source_norm)
+            
+            counts.append(source_norm)
+
+     
+
+        return(np.array(bins),np.array(counts))
+        
+        
+    def fixed_binwidth(flux,intervals,survey_area):
+
+        counts=[]
+
+        for int in range(len(intervals)-1):
+            try:
+                mask = (intervals[int] < flux) & (flux < intervals[int+1])
+
+                mean_flux=np.mean(flux[mask])
+
+                source_tot0=np.sum(mask)
+
+                source_tot1=source_tot0/ (intervals[int+1]- intervals[int])
+
+                source_tot2=source_tot1/((survey_area)*(np.pi/180)**2)
+
+                source_norm=source_tot2/mean_flux**(-2.5)
+                
+                counts.append(source_norm)
+                
+            except FloatingPointError:
+                print('interval is ',intervals[int],intervals[int+1])
+                counts.append(np.nan)
+
+        return(counts)
+        
+
     COSMOS_cat=Table.read(COSMOS_catalogue_fits)
 
     real_cat=Table.read(radio_catalogue_fits)
-
-    flux_real=np.sort(real_cat['Total_flux'])
-
-
-    intervals=np.logspace(-5,-2,50)
-    intervals1=np.logspace(-2,4,30)
-
-    #intervals_sparce=np.logspace(-6,5,20)
-
-    source_totl=[]
-    fig, ax = plt.subplots(1, 1, figsize=(6,6))
-
-    number_bins=50
-    number_sources=len(flux_real)
-
-    number_per_bin= np.int32(np.ceil(number_sources/number_bins))
-
-    source_totn=[]
-    
-    bins=[]
-
-
-    for i in range(number_bins-2):
-
-        sources=flux_real[number_per_bin*i:np.min([number_per_bin*(i+1),len(real_cat)])]
-
-        print(sources[-1])
-
-        mean_flux=np.mean(sources)
-
-        source_tot0=len(sources)
-
-        prev_max= np.mean(np.array(flux_real[number_per_bin*(i+2)-(number_per_bin+1)],flux_real[number_per_bin*(i+1)]))
-
-        bin_width=prev_max-flux_real[number_per_bin*(i)-(number_per_bin+1)]
-
-        bins.append(prev_max)
-
-        source_tot1=source_tot0/bin_width
-    
-        source_tot2=source_tot1/((1.5)*(np.pi/180)**2)
-
-        source_norm=source_tot2/mean_flux**(-2.5)
-         
-        source_totn.append(source_norm)
-
-    x=np.array(bins)
-    y=np.array(source_totn)
-   
-
-   # import IPython;IPython.embed()
 
     cluster_centre=SkyCoord(str(150 ), str(2.3), frame='icrs',unit=(u.deg,u.deg))
 
     mask_COSMOS=np.sqrt((COSMOS_cat['ra']-cluster_centre.ra.value)**2+(COSMOS_cat['dec']- cluster_centre.dec.value)**2) <=0.3
 
-    COSMOS_cat=COSMOS_cat[mask_COSMOS]
+    COSMOS_wall_cat=COSMOS_cat[mask_COSMOS]
 
-    COSMOS_flux=COSMOS_cat['flux']*10**-6
+    MeerKAT_flux=np.sort(real_cat['Total_flux'])
 
-    cosmos_source_tot=[]
+    COSMOS_flux=np.sort(COSMOS_cat['flux'])*10**-6
 
-    for int in range(len(intervals)-1):
-        try:
-            mask_real = (intervals[int] < COSMOS_flux) & (COSMOS_flux < intervals[int+1])
-
-            mean_flux=np.mean(COSMOS_flux[mask_real])
-
-            source_tot0=np.sum(mask_real)
-
-            source_tot1=source_tot0/ (intervals[int+1]- intervals[int])
-
-            source_tot2=source_tot1/((0.6)*(np.pi/180)**2)
-
-            source_norm=source_tot2/mean_flux**(-2.5)
-         
-            cosmos_source_tot.append(source_norm)
-            
-        except FloatingPointError:
-            print('interval is ',intervals[int],intervals[int+1])
-            source_totl.append(np.nan)
+    COSMOS_wall_flux =COSMOS_wall_cat['flux']*10**-6
 
 
 
+    intervals=np.logspace(-5,3,50)
 
-    for int in range(len(intervals)-1):
-        try:
-            mask_real = (intervals[int] < flux_real) & (flux_real < intervals[int+1])
+   
+    bins_COSMOS_fix,counts_COSMOS_fix=fixed_source_perbin(flux=COSMOS_flux,number_bins=50,survey_area=1.4)
 
-            mean_flux=np.mean(flux_real[mask_real])
+    bins_M_fix,counts_M_fix=fixed_source_perbin(flux=MeerKAT_flux,number_bins=50,survey_area=1.5)
 
-            source_tot0=np.sum(mask_real)
+    counts_COSMOS=fixed_binwidth(flux=COSMOS_flux,intervals=intervals,survey_area=1.4)
 
-            source_tot1=source_tot0/ (intervals[int+1]- intervals[int])
+    counts_M=fixed_binwidth(flux=MeerKAT_flux,intervals=intervals,survey_area=1.5)
 
-            source_tot2=source_tot1/((1.5)*(np.pi/180)**2)
+    bins_COSMOS_fix_wall,counts_COSMOS_fix_wall=fixed_source_perbin(flux=COSMOS_wall_flux,number_bins=50,survey_area=0.4)
 
-            print(source_tot0,source_tot2)
+    counts_COSMOS_wall=fixed_binwidth(flux=COSMOS_wall_flux,intervals=intervals,survey_area=0.4)
 
-            source_norm=source_tot2/mean_flux**(-2.5)
-         
-            source_totl.append(source_norm)
-            
-        except FloatingPointError:
-            print('interval is ',intervals[int],intervals[int+1])
-            source_totl.append(np.nan)
 
-    source_totu=[]
-    for int in range(len(intervals1)-1):
-        try:
-            mask_real = (intervals1[int] < real_cat['Total_flux']) & (real_cat['Total_flux'] < intervals1[int+1])
-
-            mean_flux=np.mean(real_cat['Total_flux'][mask_real])
-
-            source_tot0=np.sum(mask_real)
-
-            source_tot1=source_tot0/ (intervals1[int+1]- intervals1[int])
-
-            source_tot2=source_tot1/((1.5)*(np.pi/180)**2)
-
-            print(source_tot0,source_tot2)
-
-            source_norm=source_tot2/mean_flux**(-2.5)
-         
-            source_totu.append(source_norm)
-            
-        except FloatingPointError:
-            print('interval is ',intervals[int],intervals[int+1])
-            source_totu.append(np.nan)
-
-    
 
     S_TLA=[0.242,0.284,0.333,0.391,0.460,0.540,0.634,0.745,0.875,1.10,1.49,2.00,2.70,3.65,4.92,6.63,9.70,15.41,24.36,38.61,61.20,97,153.7,243.6,737]
     N_TLA=[12.49,12.26,14.33,15.48,15.24,15.72,15.73,18.37,18.88,22.55,25.58,28.09,31.61,41.89,52.37,58.26,82.08,168.5,215.2,215.1,325.8,520,908,1164.3,1751.2]
-    print('interval length is',len(((intervals[:-1]+intervals[1:])/2)))
-    print('source count length is',len(np.nancumsum(source_totl)))
-    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, source_totl,color='blue')
-    plt.scatter(((intervals1[:-1]+intervals1[1:])/2)*10**3, source_totu,color='blue',label='1283 MHz MeerKAT equal bin width')
-    #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, cosmos_source_tot,color='red',label='1.4GHz COSMOS wall')
-    plt.scatter(x*10**3, y,color='orange',label='1283 MHz MeerKAT same no sources per bin')
-    # plt.scatter(x*10**3, y,color='blue')
-    plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT')
+
+    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+
+    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_M,color='green',label='1283 MHz MeerKAT equal bin width',marker='o')
+    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS,color='blue',label='1.4 GHz COSMOS equal bin width',marker='o')
+    #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS_wall,color='green',label='1.4 GHz COSMOS wall equal bin width',marker='o')
+
+    plt.scatter(bins_M_fix*10**3, counts_M_fix,color='orange',label='1283 MHz MeerKAT equal sources per bin',marker='x')
+
+    plt.scatter(bins_COSMOS_fix*10**3, counts_COSMOS_fix,color='red',label='1.4GHz COSMOS equal sources per bin',marker='x')
+
+   
+   
+    #plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT')
     plt.xscale('log')
     plt.yscale('log')
-    ax.set_ylabel(r'$S^{2.5}\; dN/dS [Jy^{-1}]$',fontsize=15)
-    ax.set_xlabel('Flux density Jy',fontsize=15)
-    ax.legend()
+    ax.set_ylabel(r'$S^{2.5}\; dN/dS [Jy^{-1}] \, sr^{-1}$',fontsize=15)
+    ax.set_xlabel('Flux density mJy',fontsize=15)
+    plt.legend()
     plt.show()
     
     
