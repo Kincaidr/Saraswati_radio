@@ -96,29 +96,26 @@ def smearing(folder_path,cluster_name,radio_catalog,cluster_centre):
 
     t=Table.read(radio_catalog)
 
-    
-
-    flux_MeerKAT=t['Total_flux']
-
-    peak_MeerKAT=t['Peak_flux']
-
-    flux_err_MeerKAT=t['E_Total_flux']
-
-
     ra=t['RA']
     dec=t['DEC']
 
-
+    position=SkyCoord(ra, dec, frame='icrs',unit=(u.deg,u.deg))
     
     cluster_centre=SkyCoord(str(354.4195 ), str(0.27909), frame='icrs',unit=(u.deg,u.deg))
 
-
     distance= np.abs(cluster_centre.separation(position))
 
-    dist=Column(name='dist',data=distance)
+    mask=distance.deg < 2
 
-    t.add_column(dist)
+    t_new=t[mask]
 
+    distance=distance[mask]
+
+    flux_MeerKAT=t_new['Total_flux']
+
+    peak_MeerKAT=t_new['Peak_flux']
+
+    flux_err_MeerKAT=t_new['E_Total_flux']
 
 
     Ratio=(flux_MeerKAT/peak_MeerKAT)
@@ -155,7 +152,7 @@ def smearing(folder_path,cluster_name,radio_catalog,cluster_centre):
 
 
 
-def plot_image(folder_path,cluster_name,fits_image,tessel_region):
+def plot_image(folder_path,cluster_name,res_image,fits_image,tessel_region):
 
 
     def rms_value(fits_image):
@@ -165,15 +162,6 @@ def plot_image(folder_path,cluster_name,fits_image,tessel_region):
         data = image[0].data
         image_data = data#[0,0,:,:]
         image_data=np.nan_to_num(image_data)
-
-        img_min, img_max = np.min(image_data),np.max(image_data)
-        img_mean=np.mean(image_data);img_median=np.median(image_data);img_std=np.std(image_data)
-                                                                                                                                                                                 
-        sigclip = SigmaClip(sigma = 3.0)#, iters=5)
-        image_data_sigclip = sigclip(image_data)
-        image_min_clip, image_max_clip = np.min(image_data_sigclip),np.max(image_data_sigclip)
-        image_mean_clip=np.mean(image_data_sigclip);image_median_clip=np.median(image_data_sigclip);image_std_clip=np.std(image_data_sigclip)
-
         image_mean, image_median, image_stddev = sigma_clipped_stats(image_data, sigma = 3.0)#, iters = 5)
 
         print (image_stddev)
@@ -194,7 +182,7 @@ def plot_image(folder_path,cluster_name,fits_image,tessel_region):
         header['NAXIS'] = 2
         del header['*3']
         del header['*4']
-        new_fits_image='deleted_axes.fits'
+        new_fits_image=fits_image.replace(fits_image[:-4],'_corrected_axes.fits')
         w = WCS(header)
 
         fits.writeto(new_fits_image, header=header, data=data, overwrite=True)
@@ -218,21 +206,19 @@ def plot_image(folder_path,cluster_name,fits_image,tessel_region):
 
         return(new_region_file)
     
+    new_fits_res_image,res_data,res_header,w=correct_axes(res_image)
 
     new_fits_image,data,header,w=correct_axes(fits_image)
 
-    new_fits_res_image,res_data,res_header,w=correct_axes(fits_image)
-
     position = SkyCoord(res_header['CRVAL1']*u.deg, res_header['CRVAL2']*u.deg,frame='fk5',equinox='J2000.0') 
 
-    cutout = Cutout2D(res_data,position=position,size=u.Quantity((30,30), u.arcmin),wcs=w,mode='partial').data
+    cutout = Cutout2D(res_data,position=position,size=u.Quantity((60,60), u.arcmin),wcs=w,mode='partial').data
 
-    cutout_image='cutout.fits'
+    cutout_image='res_cutout.fits'
     fits.writeto(cutout_image, header=res_header, data=cutout, overwrite=True)
-
+    
     rms=rms_value(cutout_image)
    
-    #rms=rms_value(new_fits_image)
 
     new_region_file=tessels(tessel_region)
 
@@ -243,9 +229,9 @@ def plot_image(folder_path,cluster_name,fits_image,tessel_region):
 
     #f.show_colorscale(cmap='inferno',vmin =0,vmax=0.00005) 
     
-    f.show_colorscale(cmap='cubehelix_r',vmin =(-5*rms),vmax=(20*rms)) # cutouts
+    f.show_colorscale(cmap='gray',vmin =(-5*rms),vmax=(20*rms)) # cutouts
 
-    f.show_colorscale(cmap='gray',vmin =(1.0175e-05),vmax=(11e-05),vmid=0.0175e-05,stretch='log')
+    #f.show_colorscale(cmap='gray',vmin =(1.0175e-05),vmax=(11e-05),vmid=0.0175e-05,stretch='log')
     
 
     f.recenter(data_header['CRVAL1'], data_header['CRVAL2'], width =2,height = 2)
@@ -703,44 +689,71 @@ def  resolved_unresolved_sources(output_path,radio_catalog):
 
     mask=np.where(x < 10**3)
 
+    
+
     x=x[mask]
     y=y[mask]
-   
-   
 
-    def func(k,c):
 
-        return k ** (x) ** (-c)
-
-    def fraction(k,c):
-
-        counter = np.sum(func(k,c) > y)
-        return counter/len(x)*100
-        
-        
-    def min_func(args):
-        k = args[0]
-        c=args[1]
-        diff= abs(95 - fraction(k,c))
-        print(diff)
-        return diff
-    
-    k0=11.517
-    c0=1.042
-
-    x0=[k0,c0]
-
-    res = minimize(min_func, x0, tol=1e-6,method='Nelder-Mead')#, constraints={'k':[0, 10], 'c':[0, 15]})#,method='Powell')
-    print(res)
+    mid=len(y)//2
     #import IPython;IPython.embed()
+    y1=y[:mid]
+    y2=y[mid:]
+
+    
+    
+    def func(params):
+
+        return 1+A * (x) ** (-B)
+    
+    def objective(params):
+
+         return np.sum((y - func(params))**2)
+    
+
+    def constraint1(params):
+
+        A, B = params
+
+        counter = np.sum(func(params) > y1)
+        return abs(95 - counter/len(x)*100)
+
+
+    def constraint2(params):
+
+        A, B = params
+
+        counter = np.sum(func(params) > y2)
+        return abs(95 - counter/len(x)*100)
+    
+    # cons = [{'type': 'eq', 'fun': constraint1}]
+    
+    cons = [{'type': 'eq', 'fun': constraint1},
+          {'type': 'eq', 'fun': constraint2}]
+    
+    A=3
+
+    B=1
+
+    x0=[A,B]
+
+    res = minimize(objective, x0, constraints=cons,tol=1e-6,method='Nelder-Mead')#'Nelder-Mead')#, constraints={'k':[0, 10], 'c':[0, 15]})#,method='Powell')
+
+    print(res)
+    
     mask_unres=(np.array(code[mask]) == 'S') 
 
     mask_res=(np.array(code[mask]) != 'S') 
     
     rms=15e-6
     t=np.linspace(1,500,10000)
+    
+
+
     curve=res.x[0]**(t)**(-res.x[1])
-    int_curve=k0**(t)**(-c0)
+
+    #curve=res.x[0]/(1+res.x[1]/t)
+
 
     #fig  = plt.figure(figsize=(15, 7))
 
@@ -1843,19 +1856,85 @@ def completness(simulation_path,radio_catalogue_fits):
         plt.plot((intervals[:-1]+intervals[1:])/2, np.nancumsum(frac)/np.nancumsum(frac).max(), label=sim_cat)
 
         np.median(intervals[:-1]+intervals[1:])/2
-
+        
         plt.scatter((intervals[:-1]+intervals[1:])/2, np.nancumsum(frac)/np.nancumsum(frac).max(), label=sim_cat)
         plt.xscale('log')
         ax.set_ylabel('Fraction',fontsize=15)
         ax.set_xlabel('Flux density Jy',fontsize=15)
         ax.legend()
- 
+        
  
     plt.show()
 
+def angular_distribution(simulation_path,radio_catalogue_fits,fits_image):
 
 
-def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
+    rms=(13e-6)
+
+    cat=Table.read(radio_catalogue_fits)
+
+    
+
+    mask=cat['Total_flux']>(5*rms)
+
+    cat=cat[mask]
+
+    flux=cat['Total_flux']
+
+    size1=cat['Maj']*3600
+
+    size2=cat['Min']*3600
+    header=fits.getheader(fits_image)
+
+    bmaj=header['BMAJ']*3600
+    bmin=header['BMIN']*3600
+
+    A=1;B=2
+
+
+    # sigma = 0.5 * np.sqrt(bmaj * bmin)
+
+    # sizes=2 * np.sqrt(2 * np.log(2)) * sigma
+
+    sizes=bmaj*bmin
+
+
+    theta_N=np.sqrt(bmaj*bmin)
+
+    
+    flux_linspace=np.linspace(np.min(flux),np.max(flux),1000)
+
+    theta_max=theta_N*np.sqrt((flux_linspace/(5*rms)) -1)
+
+    
+    theta_min=theta_N*np.sqrt(A*(1+B/(flux_linspace))-1)
+
+    num_bins = 10
+
+    # Calculate the bin edges based on the x data range
+    bin_edges = np.linspace(flux_linspace.min(), flux_linspace.max(), num_bins + 1)
+
+    # Use np.digitize to bin the x data
+    bin_indices = np.digitize(flux_linspace, bin_edges)
+
+    # Calculate the median of y for each bin
+    bin_medians = [np.median(flux_linspace[bin_indices == i]) for i in range(1, num_bins + 1)]
+
+    
+    
+    plt.plot(((bin_edges[:-1] + bin_edges[1:]) / 2)*10**3, bin_medians, color='red', marker='x', label='Median flux ratio')
+    
+    #plt.plot( bin_edges,bin_medians,color='purple',marker='D')
+
+    plt.plot(flux_linspace*10**3,theta_max,color='orange')
+    plt.plot(flux_linspace*10**3,theta_min,'--',color='orange')
+    plt.scatter(flux*10**3,sizes)
+    plt.xscale('log')
+    plt.ylim(0,100)
+    #plt.yscale('log')
+    plt.show()
+
+def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,output_path,cluster_name):
 
 
 
@@ -1946,7 +2025,6 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
     COSMOS_wall_flux =COSMOS_wall_cat['flux']*10**-6
 
 
-
     intervals=np.logspace(-5,3,50)
 
    
@@ -1963,28 +2041,33 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits):
     counts_COSMOS_wall=fixed_binwidth(flux=COSMOS_wall_flux,intervals=intervals,survey_area=0.4)
 
 
-
     S_TLA=[0.242,0.284,0.333,0.391,0.460,0.540,0.634,0.745,0.875,1.10,1.49,2.00,2.70,3.65,4.92,6.63,9.70,15.41,24.36,38.61,61.20,97,153.7,243.6,737]
     N_TLA=[12.49,12.26,14.33,15.48,15.24,15.72,15.73,18.37,18.88,22.55,25.58,28.09,31.61,41.89,52.37,58.26,82.08,168.5,215.2,215.1,325.8,520,908,1164.3,1751.2]
 
-    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+    fig, ax = plt.subplots(1, 1, figsize=(9,7))
+
+    import IPython;IPython.embed()
 
     plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_M,color='green',label='1283 MHz MeerKAT equal bin width',marker='o')
     plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS,color='blue',label='1.4 GHz COSMOS equal bin width',marker='o')
     #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS_wall,color='green',label='1.4 GHz COSMOS wall equal bin width',marker='o')
 
-    plt.scatter(bins_M_fix*10**3, counts_M_fix,color='orange',label='1283 MHz MeerKAT equal sources per bin',marker='x')
+    # plt.scatter(bins_M_fix*10**3, counts_M_fix,color='orange',label='1283 MHz MeerKAT equal sources per bin',marker='x')
 
-    plt.scatter(bins_COSMOS_fix*10**3, counts_COSMOS_fix,color='red',label='1.4GHz COSMOS equal sources per bin',marker='x')
+    # plt.scatter(bins_COSMOS_fix*10**3, counts_COSMOS_fix,color='red',label='1.4GHz COSMOS equal sources per bin',marker='x')
 
    
    
-    #plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT')
+    plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT Super-CLASS field')
     plt.xscale('log')
     plt.yscale('log')
-    ax.set_ylabel(r'$S^{2.5}\; dN/dS [Jy^{-1}] \, sr^{-1}$',fontsize=15)
-    ax.set_xlabel('Flux density mJy',fontsize=15)
+    ax.set_ylabel(r'$S^{2.5}\; dN/dS [Jy^{-1} \, sr^{-1} ]$',fontsize=15)
+    ax.set_xlabel('Flux density [mJy]',fontsize=15)
     plt.legend()
+    plt.tight_layout()
+    plt.savefig(output_path+cluster_name+'_source_counts.pdf')
     plt.show()
+
+    
     
     
