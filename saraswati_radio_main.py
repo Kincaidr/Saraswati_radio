@@ -1,5 +1,5 @@
 import sys
-from saraswati_radio_plots import smearing,write_catalog,write_catalog_20sigma,spectral_index,plot_image,spatial_spectral_index,rms_plot,spectral_index_distance,spectral_distributions,radio_lumo_distance,radio_lumo_distance,radio_power_distributions,astrometry_NVSS,astrometry_VLASS,flux_scale_NVSS,flux_scale_VLASS,flux_distribution,resolved_unresolved_sources,redshift_distributions,simulation,astrometry_FIRST,flux_scale_FIRST,cumulative_rms_map,radio_cutouts,simulation_catalog,completness,source_counts
+from saraswati_radio_plots import smearing,write_catalog,write_catalog_20sigma,spectral_index,plot_image,spatial_spectral_index,rms_plot,spectral_index_distance,spectral_distributions,radio_lumo_distance,radio_lumo_distance,radio_power_distributions,astrometry_NVSS,astrometry_VLASS,flux_scale_NVSS,flux_scale_VLASS,flux_distribution,resolved_unresolved_sources,redshift_distributions,simulation,astrometry_FIRST,flux_scale_FIRST,cumulative_rms_map,radio_cutouts,simulation_catalog,completness,source_counts,angular_distribution
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 import pandas as pd
@@ -126,7 +126,7 @@ def  plotting_scripts(output_path,fits_files,simulation_path,cluster_name,radio_
     #rms_plot(output_path,cluster_name,fits_image,fits_image)
     #smearing(output_path,cluster_name,radio_catalogue_fits,cluster_centre)
     #spectral_index(output_path,cluster_name,radio_catalogue_fits
-    #plot_image(output_path,cluster_name,fits_image,tessel_region)
+    #plot_image(output_path,cluster_name,res_image,fits_image,tessel_region)
     
     #redshift_distributions(output_path,cluster_name,radio_optical_catalog)
     
@@ -137,7 +137,8 @@ def  plotting_scripts(output_path,fits_files,simulation_path,cluster_name,radio_
     #simulation(cluster_name,simulation_path,radio_catalogue_fits,fits_image,res_image,rms_image)
     #simulation_catalog(simulation_path)
     #completness(simulation_path,radio_catalogue_fits)
-    source_counts(radio_catalogue_fits,COSMOS_catalogue_fits)
+    angular_distribution(simulation_path,radio_catalogue_fits,fits_image)
+    #source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,output_path,cluster_name)
 
 def  plotting_combine_scripts(output_path,combined_MeerKAT_cat,combined_MeerKAT_NVSS_cat,combined_MeerKAT_FIRST_cat,combined_MeerKAT_VLASS_cat,combined_VLASS_cat,combined_NVSS_cat,fits_image_A2631,fits_image_Zwcl2341):
     
@@ -148,13 +149,13 @@ def  plotting_combine_scripts(output_path,combined_MeerKAT_cat,combined_MeerKAT_
     #flux_scale_VLASS(output_path,combined_MeerKAT_VLASS_cat,flux_colname='Flux',Pflux_colname='Fpk',e_flux_colname='e_Flux',survey='VLASS',freq=3e9)
     #flux_scale_FIRST(output_path,combined_MeerKAT_FIRST_cat,flux_colname='Fint',Pflux_colname='Peak_flux',e_flux_colname='E_Total_flux',survey='FIRST',freq=1.4e9)
     #flux_scale_NVSS(output_path,combined_MeerKAT_NVSS_cat,flux_colname='S1.4',Pflux_colname='Peak_flux',e_flux_colname='e_S1.4',survey='NVSS',freq=1.4e9)
-    resolved_unresolved_sources(output_path,combined_MeerKAT_cat)
+    #resolved_unresolved_sources(output_path,combined_MeerKAT_cat)
     #flux_distribution(output_path,combined_MeerKAT_cat)
     #spectral_distributions(output_path,combined_MeerKAT_cat)
     #spatial_spectral_index(output_path,combined_MeerKAT_cat)
 
 if __name__ == "__main__":
     #zwcl_main(sys.argv) 
-    A2631_main(sys.argv)
-    #combine_main(sys.argv)
+    #A2631_main(sys.argv)
+    combine_main(sys.argv)
 
