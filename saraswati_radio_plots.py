@@ -28,14 +28,14 @@ from astropy.wcs import WCS
 from astropy.nddata.utils import Cutout2D
 from astropy.table import Table, Column
 from scipy.optimize import curve_fit
-from scipy.optimize import minimize
+from scipy.optimize import minimize, basinhopping
 from scipy.stats import cumfreq
 
 def write_catalog(fits_files,cluster_name,app_image,int_image):
     
 
-    img = bdsf.process_image(int_image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
-                  detection_image=app_image,interactive=False,clobber=True,spectralindex_do = False) #spectralindex_do = True
+    img = bdsf.process_image(app_image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
+                  detection_image=app_image,interactive=False,clobber=True,spectralindex_do = False,atrous_do = True) #spectralindex_do = True
     
     # img = bdsf.process_image(int_image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
     #                detection_image=app_image,interactive=False,clobber=True,spectralindex_do = False,atrous_do = False,shapelet_do = False) 
@@ -668,7 +668,7 @@ def cumulative_rms_map(output_path,cluster_name,fits_image):
 
 
     
-def  resolved_unresolved_sources(output_path,radio_catalog):
+def resolved_unresolved_sources(output_path,radio_catalog):
 
     
     radio_catalogue= fits.open(radio_catalog)
@@ -684,78 +684,96 @@ def  resolved_unresolved_sources(output_path,radio_catalog):
 
     rms=15e-6
 
-    y=peak_MeerKAT/flux_MeerKAT
+    y=flux_MeerKAT/peak_MeerKAT
     x=peak_MeerKAT/rms
 
-    mask=np.where(x < 10**3)
+    mask=(x < (10**3)) & (y < 1)
 
-    
+    x, y = x[mask], y[mask]
+    mid=len(y)//3
 
-    x=x[mask]
-    y=y[mask]
+    ord=np.argsort(x)
+    x, y = x[ord], y[ord]
+
+    x1=x[:mid]
+    x2=x[mid:2*mid]
+    x3=x[2*mid:]
 
 
-    mid=len(y)//2
-    #import IPython;IPython.embed()
     y1=y[:mid]
-    y2=y[mid:]
+    y2=y[mid:2*mid]
+    y3=y[2*mid:]
 
+    def func(params, x1, y1, x2, y2,x3,y3):
+
+        a, b = params
+        f1 = 1 + a*(x1)**(-b)
+        
+        counter1 = np.sum(f1 < y1)
+
+        val1 = abs(0.9 - (counter1/len(x1)))
     
-    
-    def func(params):
+        f2 = 1 + a*(x2)**(-b)
+        counter2 = np.sum(f2 < y2)
+        val2 = abs(0.9 - (counter2/len(x2)))
+        print(counter1, counter2)
 
-        return 1+A * (x) ** (-B)
-    
-    def objective(params):
+        f3 = 1 + a*(x3)**(-b)
+        counter3 = np.sum(f3 < y3)
+        val3 = abs(0.9 - (counter3/len(x3)))
 
-         return np.sum((y - func(params))**2)
-    
+        return val1+val2+val3
 
-    def constraint1(params):
-
-        A, B = params
-
-        counter = np.sum(func(params) > y1)
-        return abs(95 - counter/len(x)*100)
-
-
-    def constraint2(params):
-
-        A, B = params
-
-        counter = np.sum(func(params) > y2)
-        return abs(95 - counter/len(x)*100)
-    
-    # cons = [{'type': 'eq', 'fun': constraint1}]
-    
-    cons = [{'type': 'eq', 'fun': constraint1},
-          {'type': 'eq', 'fun': constraint2}]
-    
-    A=3
-
-    B=1
-
-    x0=[A,B]
-
-    res = minimize(objective, x0, constraints=cons,tol=1e-6,method='Nelder-Mead')#'Nelder-Mead')#, constraints={'k':[0, 10], 'c':[0, 15]})#,method='Powell')
+    x0 = [-1, 0.3]
+    minimizer_kwargs = {"args":(x1, y1, x2, y2, x3, y3)}
+    res = basinhopping(func, x0, minimizer_kwargs=minimizer_kwargs, niter=1000) #, tol=1e-6,method='Nelder-Mead')#'Nelder-Mead')#, constraints={'k':[0, 10], 'c':[0, 15]})#,method='Powell')
 
     print(res)
+
+    a, b = res.x
+    f1 = 1 + a*(x1)**(-b)
+
+    counter1 = np.sum(f1 < y1)
+
+    val1 = abs(0.95 - (counter1/len(x1)))
+
+    f2 = 1 + a*(x2)**(-b)
+    counter2 = np.sum(f2 < y2)
+    val2 = abs(0.95 - (counter2/len(x2)))
+    print(counter1, counter2)
+    print(val1, val2)
+    
     
     mask_unres=(np.array(code[mask]) == 'S') 
 
     mask_res=(np.array(code[mask]) != 'S') 
     
-    rms=15e-6
-    t=np.linspace(1,500,10000)
+    rms = 15e-6
+    t = np.linspace(x.min(), 10**6, 10000)
     
+    #import IPython;IPython.embed()
 
+    curve=1+res.x[0]*(t)**(-res.x[1])
 
-    curve=res.x[0]**(t)**(-res.x[1])
-
-    #curve=res.x[0]/(1+res.x[1]/t)
-
+    
+    y=flux_MeerKAT/peak_MeerKAT
+    x=peak_MeerKAT/rms
+    curve1=1+res.x[0]*(x)**(-res.x[1])
 
     #fig  = plt.figure(figsize=(15, 7))
+
+    unresolved_mask= (y > curve1) & (y < (2-curve1))
+
+    resolved_mask= ~unresolved_mask
+
+    total_unresolved=np.sum(unresolved_mask)
+
+    total_resolved=np.sum(resolved_mask)
+
+    print("Total unresolved sources",total_unresolved)
+    print("Total resolved sources",total_resolved)
+
+
 
     fig,ax=plt.subplots()
     ax.fill_between(t,curve,2-curve,alpha=0.6,label='unresolved sources')
@@ -768,7 +786,7 @@ def  resolved_unresolved_sources(output_path,radio_catalog):
     plt.axhline(y=1,color='r',linestyle='--')
 
 
-    plt.scatter(x,1/y,alpha=0.5,s=10,color='grey')
+    plt.scatter(x,y,alpha=0.5,s=10,color='grey')
 
     plt.xlabel(r'$S_P/\sigma$',fontsize=18)
     # plt.xlim(0,500)
@@ -776,8 +794,8 @@ def  resolved_unresolved_sources(output_path,radio_catalog):
     plt.ylabel(r'$S_T/ S_P$',fontsize=18)
     plt.xscale('log')
     plt.yscale('log')
-    plt.ylim([0.5, 11])
-    plt.xlim([3, 1000])
+    #plt.ylim([0., 11])
+    #plt.xlim([3, 1000])
     plt.tight_layout()
     plt.legend()
     plt.savefig(output_path+'_resolved_unresolved.pdf')
@@ -1881,6 +1899,8 @@ def angular_distribution(simulation_path,radio_catalogue_fits,fits_image):
 
     flux=cat['Total_flux']
 
+    peak=cat['Peak_flux']
+
     size1=cat['Maj']*3600
 
     size2=cat['Min']*3600
@@ -1889,48 +1909,47 @@ def angular_distribution(simulation_path,radio_catalogue_fits,fits_image):
     bmaj=header['BMAJ']*3600
     bmin=header['BMIN']*3600
 
-    A=1;B=2
+    A=2;B=1
 
-
-    # sigma = 0.5 * np.sqrt(bmaj * bmin)
-
-    # sizes=2 * np.sqrt(2 * np.log(2)) * sigma
-
-    sizes=bmaj*bmin
-
+    sizes = np.sqrt(size1 * size2)
+    
 
     theta_N=np.sqrt(bmaj*bmin)
 
+    x=peak/rms
     
-    flux_linspace=np.linspace(np.min(flux),np.max(flux),1000)
+    flux_linspace=np.linspace(flux.min(),flux.max(),1000)
+
+    rms_linspace=np.linspace(x.min(),x.max(),1000)
 
     theta_max=theta_N*np.sqrt((flux_linspace/(5*rms)) -1)
 
+   
     
-    theta_min=theta_N*np.sqrt(A*(1+B/(flux_linspace))-1)
+    theta_min=theta_N*np.sqrt(A*(1+B/(rms_linspace))-1)
 
     num_bins = 10
 
     # Calculate the bin edges based on the x data range
-    bin_edges = np.linspace(flux_linspace.min(), flux_linspace.max(), num_bins + 1)
+    bins = np.linspace(flux.min(), flux.max(), num_bins + 1)
 
-    # Use np.digitize to bin the x data
-    bin_indices = np.digitize(flux_linspace, bin_edges)
 
-    # Calculate the median of y for each bin
-    bin_medians = [np.median(flux_linspace[bin_indices == i]) for i in range(1, num_bins + 1)]
+    bins_mid = 0.5* (bins[1:] + bins[:-1])
 
-    
-    
-    plt.plot(((bin_edges[:-1] + bin_edges[1:]) / 2)*10**3, bin_medians, color='red', marker='x', label='Median flux ratio')
+    #import IPython;IPython.embed()
+    median_size=sizes[np.where(bins_mid)]
+
+
+    plt.plot(bins_mid*10**3, median_size, color='red', marker='x', label='Median flux ratio')
     
     #plt.plot( bin_edges,bin_medians,color='purple',marker='D')
 
     plt.plot(flux_linspace*10**3,theta_max,color='orange')
-    plt.plot(flux_linspace*10**3,theta_min,'--',color='orange')
+    plt.plot(rms_linspace*10**3,theta_min,'--',color='orange')
     plt.scatter(flux*10**3,sizes)
+    plt.axhline(y=8, color='black',linewidth=2)
     plt.xscale('log')
-    plt.ylim(0,100)
+    plt.ylim(-10,50)
     #plt.yscale('log')
     plt.show()
 
@@ -2046,10 +2065,11 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,output_path,cluster
 
     fig, ax = plt.subplots(1, 1, figsize=(9,7))
 
-    import IPython;IPython.embed()
+    #import IPython;IPython.embed()
 
     plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_M,color='green',label='1283 MHz MeerKAT equal bin width',marker='o')
     plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS,color='blue',label='1.4 GHz COSMOS equal bin width',marker='o')
+    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS_wall,color='pink',label='1.4 GHz COSMOS Wall equal bin width',marker='o')
     #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS_wall,color='green',label='1.4 GHz COSMOS wall equal bin width',marker='o')
 
     # plt.scatter(bins_M_fix*10**3, counts_M_fix,color='orange',label='1283 MHz MeerKAT equal sources per bin',marker='x')
@@ -2058,7 +2078,7 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,output_path,cluster
 
    
    
-    plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT Super-CLASS field')
+    #plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT Super-CLASS field')
     plt.xscale('log')
     plt.yscale('log')
     ax.set_ylabel(r'$S^{2.5}\; dN/dS [Jy^{-1} \, sr^{-1} ]$',fontsize=15)
