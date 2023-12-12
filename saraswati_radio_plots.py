@@ -34,8 +34,8 @@ from scipy.stats import cumfreq
 def write_catalog(fits_files,cluster_name,app_image,int_image):
     
 
-    img = bdsf.process_image(app_image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
-                  detection_image=app_image,interactive=False,clobber=True,spectralindex_do = False,atrous_do = True) #spectralindex_do = True
+    img = bdsf.process_image(int_image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
+                  detection_image=app_image,interactive=False,clobber=True,spectralindex_do = False,atrous_do = False) #spectralindex_do = True
     
     # img = bdsf.process_image(int_image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
     #                detection_image=app_image,interactive=False,clobber=True,spectralindex_do = False,atrous_do = False,shapelet_do = False) 
@@ -800,6 +800,8 @@ def resolved_unresolved_sources(output_path,radio_catalog):
     plt.legend()
     plt.savefig(output_path+'_resolved_unresolved.pdf')
     plt.show()
+
+    return(unresolved_mask,resolved_mask)
 
 
 
@@ -1668,7 +1670,7 @@ def flux_scale_NVSS(output_path,combined_MeerKAT_cat,flux_colname,Pflux_colname,
 
         slope, intercept = params
 
-        slope, intercept,r_value, p_value, std_err = stats.linregress(MeerKAT_flux* (freq / 1.283e9)**-0.7, ref_flux)
+        slope, intercept,r_value, p_value, std_err = stats.linregress(np.log10(MeerKAT_flux* (freq / 1.283e9)**-0.7), np.log10(ref_flux))
 
         print('r value is',r_value)
 
@@ -1862,29 +1864,32 @@ def completness(simulation_path,radio_catalogue_fits):
 
             try:
                 mask_real = (intervals[int] < real_cat['Total_flux']) & (real_cat['Total_flux'] < intervals[int+1])
-                mask = (intervals[int] < (cat['Total_flux']/10**6)) & ((cat['Total_flux']/10**6) < intervals[int+1])
+                mask = (intervals[int] < (cat['Total_flux'])) & ((cat['Total_flux']) < intervals[int+1])
                 frac.append(np.sum(mask)/np.sum(mask_real))
+                print(frac)
                 
             except FloatingPointError:
-                print('interval is ',intervals[int],intervals[int+1])
+                #print('interval is ',intervals[int],intervals[int+1])
                 frac.append(np.nan)
 
-            print('mask and real counts',np.sum(mask),np.sum(mask_real))
+            #print('mask and real counts',np.sum(mask),np.sum(mask_real))
         
-        plt.plot((intervals[:-1]+intervals[1:])/2, np.nancumsum(frac)/np.nancumsum(frac).max(), label=sim_cat)
+        
+        plt.plot(((intervals[:-1]+intervals[1:])/2), np.nancumsum(frac)/np.nancumsum(frac).max(), label=sim_cat)
 
-        np.median(intervals[:-1]+intervals[1:])/2
+#        np.median(intervals[:-1]+intervals[1:])/2
         
-        plt.scatter((intervals[:-1]+intervals[1:])/2, np.nancumsum(frac)/np.nancumsum(frac).max(), label=sim_cat)
+        plt.scatter(((intervals[:-1]+intervals[1:])/2), np.nancumsum(frac)/np.nancumsum(frac).max())
         plt.xscale('log')
+        plt.xlim(10**-2,10**2)
         ax.set_ylabel('Fraction',fontsize=15)
-        ax.set_xlabel('Flux density Jy',fontsize=15)
+        ax.set_xlabel('Flux density [mJy]',fontsize=15)
         ax.legend()
         
  
     plt.show()
 
-def angular_distribution(simulation_path,radio_catalogue_fits,fits_image):
+def angular_distribution(simulation_path,radio_catalogue_fits,fits_image,unresolved_mask,resolved_mask):
 
 
     rms=(13e-6)
@@ -1908,6 +1913,10 @@ def angular_distribution(simulation_path,radio_catalogue_fits,fits_image):
 
     bmaj=header['BMAJ']*3600
     bmin=header['BMIN']*3600
+
+    resolved=cat['Total_flux'][resolved_mask]
+
+    unresolved=cat['Total_flux'][unresolved_mask]
 
     A=2;B=1
 
@@ -1936,8 +1945,9 @@ def angular_distribution(simulation_path,radio_catalogue_fits,fits_image):
 
     bins_mid = 0.5* (bins[1:] + bins[:-1])
 
-    #import IPython;IPython.embed()
+    
     median_size=sizes[np.where(bins_mid)]
+
 
 
     plt.plot(bins_mid*10**3, median_size, color='red', marker='x', label='Median flux ratio')
@@ -1946,7 +1956,8 @@ def angular_distribution(simulation_path,radio_catalogue_fits,fits_image):
 
     plt.plot(flux_linspace*10**3,theta_max,color='orange')
     plt.plot(rms_linspace*10**3,theta_min,'--',color='orange')
-    plt.scatter(flux*10**3,sizes)
+    plt.scatter(unresolved*10**3,sizes)
+    #plt.scatter(resolved*10**3,sizes)
     plt.axhline(y=8, color='black',linewidth=2)
     plt.xscale('log')
     plt.ylim(-10,50)
@@ -2067,18 +2078,18 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,output_path,cluster
 
     #import IPython;IPython.embed()
 
-    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_M,color='green',label='1283 MHz MeerKAT equal bin width',marker='o')
-    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS,color='blue',label='1.4 GHz COSMOS equal bin width',marker='o')
-    plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS_wall,color='pink',label='1.4 GHz COSMOS Wall equal bin width',marker='o')
+    #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_M,color='green',label='1283 MHz MeerKAT equal bin width',marker='o')
+    #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS,color='blue',label='1.4 GHz COSMOS equal bin width',marker='o')
+    #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS_wall,color='pink',label='1.4 GHz COSMOS Wall equal bin width',marker='o')
     #plt.scatter(((intervals[:-1]+intervals[1:])/2)*10**3, counts_COSMOS_wall,color='green',label='1.4 GHz COSMOS wall equal bin width',marker='o')
 
-    # plt.scatter(bins_M_fix*10**3, counts_M_fix,color='orange',label='1283 MHz MeerKAT equal sources per bin',marker='x')
+    plt.scatter(bins_M_fix*10**3, counts_M_fix,color='orange',label='1283 MHz MeerKAT equal sources per bin',marker='x')
 
-    # plt.scatter(bins_COSMOS_fix*10**3, counts_COSMOS_fix,color='red',label='1.4GHz COSMOS equal sources per bin',marker='x')
+    plt.scatter(bins_COSMOS_fix*10**3, counts_COSMOS_fix,color='red',label='1.4GHz COSMOS equal sources per bin',marker='x')
 
    
    
-    #plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT Super-CLASS field')
+    plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT Super-CLASS field')
     plt.xscale('log')
     plt.yscale('log')
     ax.set_ylabel(r'$S^{2.5}\; dN/dS [Jy^{-1} \, sr^{-1} ]$',fontsize=15)
