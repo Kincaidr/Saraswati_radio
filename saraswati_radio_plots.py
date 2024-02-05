@@ -35,7 +35,7 @@ def write_catalog(fits_files,cluster_name,app_image,int_image):
     
 
     img = bdsf.process_image(int_image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
-                 detection_image=app_image,interactive=False,clobber=True,spectralindex_do = False,atrous_do = False) #spectralindex_do = True
+                 detection_image=int_image,interactive=False,clobber=True,spectralindex_do = False,atrous_do = True) #spectralindex_do = True
     
  
     # img = bdsf.process_image(int_image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
@@ -72,7 +72,7 @@ def write_simulated_catalog(fits_files,cluster_name,app_image,int_image):
 
 
 
-def plot_image(folder_path,cluster_name,res_image,fits_image,tessel_region):
+def plot_image(folder_path,cluster_name,res_image,int_image,tessel_region):
 
 
     def rms_value(fits_image):
@@ -95,7 +95,7 @@ def plot_image(folder_path,cluster_name,res_image,fits_image,tessel_region):
         data_hdu = fits.open(fits_image)[0]
         data = data_hdu.data
         header = data_hdu.header
-        #data = data[0,0,:,:]
+        data = data[0,0,:,:]
         data = data[:,:]
 
         header = header.copy()
@@ -103,7 +103,7 @@ def plot_image(folder_path,cluster_name,res_image,fits_image,tessel_region):
         header['NAXIS'] = 2
         del header['*3']
         del header['*4']
-        new_fits_image=fits_image.replace(fits_image[:-4],'_corrected_axes.fits')
+        new_fits_image=fits_image.replace(fits_image[-5:],'corrected_axes.fits')
         w = WCS(header)
 
         fits.writeto(new_fits_image, header=header, data=data, overwrite=True)
@@ -129,9 +129,9 @@ def plot_image(folder_path,cluster_name,res_image,fits_image,tessel_region):
     
     new_fits_res_image,res_data,res_header,w1=correct_axes(res_image)
 
-    new_fits_image,data,header,w=correct_axes(fits_image)
+    new_fits_image,data,header,w=correct_axes(int_image)
 
-    position = SkyCoord(res_header['CRVAL1']*u.deg, res_header['CRVAL2']*u.deg,frame='fk5',equinox='J2000.0') 
+    #position = SkyCoord(res_header['CRVAL1']*u.deg, res_header['CRVAL2']*u.deg,frame='fk5',equinox='J2000.0') 
 
     #cutout = Cutout2D(res_data,position=position,size=u.Quantity((60,60), u.arcmin),wcs=w1,mode='partial').data
 
@@ -139,28 +139,28 @@ def plot_image(folder_path,cluster_name,res_image,fits_image,tessel_region):
     #fits.writeto(cutout_image, header=res_header, data=cutout, overwrite=True)
     
     rms=rms_value(new_fits_res_image)
-
-    rms=15e-6
+    print('')
+    #rms=15e-6
    
 
     new_region_file=tessels(tessel_region)
 
-    data_hdu = fits.open(fits_image)[0]
-    data_header = data_hdu.header
+    # data_hdu = fits.open(new_fits_image)[0]
+    # data_header = data_hdu.header
 
     f= aplpy.FITSFigure(new_fits_image) 
 
     #f.show_colorscale(cmap='inferno',vmin =0,vmax=0.00005) 
     
-    f.show_colorscale(cmap='gray',vmin =(-5*rms),vmax=(20*rms)) # cutouts
+    f.show_colorscale(cmap='gray',vmin =(-5*rms),vmax=(100*rms)) # cutouts
 
     #f.show_colorscale(cmap='gray',vmin =(1.0175e-05),vmax=(11e-05),vmid=0.0175e-05,stretch='log')
     
-
-    f.recenter(data_header['CRVAL1'], data_header['CRVAL2'], width =2,height = 2)
-    f.add_colorbar()
+    #import IPython;IPython.embed()
+    f.recenter(header['CRVAL1'], header['CRVAL2'], width =1.5,height = 1.5)
+    #f.add_colorbar()
     
-    f.colorbar.set_font(size=30)
+    #f.colorbar.set_font(size=30)
 
     f.tick_labels.set_font(size=30)
     f.axis_labels.set_font(size=30)
@@ -169,9 +169,9 @@ def plot_image(folder_path,cluster_name,res_image,fits_image,tessel_region):
     f.scalebar.set_color('black')
     f.scalebar.set_font_size(size=14)
     
-    f.colorbar.set_axis_label_text('Jy/beam')
-    f.colorbar.set_axis_label_font(size='x-large')
-    f.colorbar.set_font(size='large')
+    # f.colorbar.set_axis_label_text('Jy/beam')
+    # f.colorbar.set_axis_label_font(size='x-large')
+    # f.colorbar.set_font(size='large')
     #f.show_regions(new_region_file)
     f.tick_labels.set_font(size='x-large')
     f.axis_labels.set_font(size='x-large')
@@ -188,7 +188,7 @@ def plot_image(folder_path,cluster_name,res_image,fits_image,tessel_region):
 def pb_attenuation(fits_files,cluster_name,radio_catalog_fits,radio_catalog_app_fits):
 
    
-    import IPython;IPython.embed()
+    
 
     int_cat=Table.read( radio_catalog_fits)
 
@@ -713,8 +713,8 @@ def resolved_unresolved_sources(output_path,radio_catalog):
     
     #import IPython;IPython.embed()
 
-    x0=-0.9137940578423331
-    x1=0.4642323636146572
+    x0=-2.0791013900664668
+    x1=0.8406631924427972
     # x0=res.x[0]
     # x1=res.x[1]
 
@@ -1683,7 +1683,7 @@ def flux_scale_NVSS(output_path,combined_MeerKAT_cat,flux_colname,Pflux_colname,
         plt.show()
         
         
-def simulation(cluster_name,simulation_path,radio_catalogue_fits,fits_image,res_image,rms_image):
+def simulation_image(cluster_name,simulation_path,radio_catalogue_fits,fits_image,res_image,rms_image):
 
 
     cat=Table.read(radio_catalogue_fits)
@@ -1796,7 +1796,7 @@ def simulation_catalog(simulation_path):
     for image in images:
 
         img = bdsf.process_image(image, rms_box=(40,40),rms_box_bright=(15,15),adaptive_thresh=150,thresh_isl=4.0,thresh_pix=5.0,
-                    detection_image=image,interactive=False ,clobber=True,spectralindex_do = False)#,atrous_do = True)
+                    detection_image=image,interactive=False ,clobber=True,spectralindex_do = False,atrous_do = True)
         
 
         img.write_catalog(outfile=image[:-5]+'_srl.fits',format='fits', catalog_type='srl',clobber=True)
@@ -1814,21 +1814,27 @@ def completness(simulation_path,radio_catalogue_fits):
     min_flux=flux_real.min()
     max_flux=flux_real.max()
 
-   
-    intervals=np.logspace(-6,5,500)
 
-    #intervals_sparce=np.logspace(-6,5,20)
+    intervals=np.logspace(-6,5,50)
 
 
+    fractions={}
     fig, ax = plt.subplots(1, 1, figsize=(6,6))
 
-    for sim_cat in sim_catalogs:
+    for i,sim_cat in enumerate(sim_catalogs):
+        key1=f'sim_{i}_frac'
+        key2=f'flux_{i}'
         frac = []
         print(sim_cat)
         for int in range(len(intervals)-1):
             cat=Table.read(sim_cat)
 
             try:
+                # mask_real = (intervals[int] < real_cat['Total_flux']) & (real_cat['Total_flux'] < intervals[int+1])
+                # mask = (intervals[int] < (cat['Total_flux'])) & ((cat['Total_flux']) < intervals[int+1])
+                # frac.append(np.sum(mask)/np.sum(mask_real))
+                # print(frac)
+
                 mask_real = (intervals[int] < real_cat['Total_flux']) & (real_cat['Total_flux'] < intervals[int+1])
                 mask = (intervals[int] < (cat['Total_flux'])) & ((cat['Total_flux']) < intervals[int+1])
                 frac.append(np.sum(mask)/np.sum(mask_real))
@@ -1840,10 +1846,11 @@ def completness(simulation_path,radio_catalogue_fits):
 
             #print('mask and real counts',np.sum(mask),np.sum(mask_real))
         
+        fractions[key1]=frac
         
         plt.plot(((intervals[:-1]+intervals[1:])/2), np.nancumsum(frac)/np.nancumsum(frac).max(), label=sim_cat)
 
-#        np.median(intervals[:-1]+intervals[1:])/2
+        #np.median(intervals[:-1]+intervals[1:])/2
         
         plt.scatter(((intervals[:-1]+intervals[1:])/2), np.nancumsum(frac)/np.nancumsum(frac).max())
         plt.xscale('log')
@@ -1852,8 +1859,122 @@ def completness(simulation_path,radio_catalogue_fits):
         ax.set_xlabel('Flux density [mJy]',fontsize=15)
         ax.legend()
         
- 
+    import IPython;IPython.embed()
     plt.show()
+
+
+def counts_corrections(simulation_path,radio_catalogue_fits):
+
+    sim_catalogs=glob.glob(simulation_path+'*_srl.fits')
+
+    real_cat=Table.read(radio_catalogue_fits)
+
+    flux_real=real_cat['Total_flux']
+
+    counts_freq =1.4
+
+    data_freq=1.28
+
+    Spectral_Index=-0.7
+
+    flux_real = flux_real * (counts_freq / data_freq) ** Spectral_Index
+
+    min_flux=flux_real.min()
+    max_flux=flux_real.max()
+
+    # min_flux=10**-6
+    # max_flux=10**5
+
+    nbins=20
+
+    Range_x  = np.linspace(start=np.log10(min_flux), stop=np.log10(max_flux), num=2*nbins+1)
+    left_bin  = 10**(Range_x[0:-1:2])
+    centres  = 10**(Range_x[1::2])
+    right_bin = 10**(Range_x[2::2])
+    
+    fractions={}
+    
+    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+
+    sim_frac=[]
+
+    for i,sim_cat in enumerate(sim_catalogs):
+        
+        key = f'sim_{i}'
+        fractions[key]={}
+        frac = []
+        centre=[]
+        print(sim_cat)
+        for int in range(len(left_bin)):
+            cat=Table.read(sim_cat)
+            flux_sim=cat['Total_flux']
+
+            try:
+                subset_real =  (flux_real>= left_bin[int]) & (flux_real < right_bin[int] ) 
+        
+                subset_sim =  (flux_sim>= left_bin[int]) & (flux_sim < right_bin[int] ) 
+
+                source_tot_real=np.sum(subset_real)
+
+                source_tot_sim=np.sum(subset_sim)
+
+                print('Total sources simulated',source_tot_sim)
+
+                print('Total sources real',source_tot_real)
+
+                frac.append(source_tot_sim/source_tot_real)
+                
+                centre.append(centres[int])
+
+                print(len(frac),len(centre))
+                
+            except FloatingPointError:
+                #print('interval is ',intervals[int],intervals[int+1])
+                frac.append(np.nan)
+                centre.append(centres[int])
+
+
+        fractions[key]['frac']=frac
+        fractions[key]['flux']=centre
+        
+        plt.plot(centres, np.nancumsum(frac)/np.nancumsum(frac).max(), label=sim_cat)
+
+    
+        plt.xscale('log')
+        #plt.xlim(10**-2,10**2)
+        ax.set_ylabel('Fraction',fontsize=15)
+        ax.set_xlabel('Flux density [mJy]',fontsize=15)
+        ax.legend()
+    plt.show()
+    # import pandas as pd
+
+    # df = pd.DataFrame.from_dict(fractions, orient='index')
+    # df.to_csv('count_corrections.csv')
+
+    # df = pd.read_csv('count_corrections.csv')
+
+    #import IPython;IPython.embed()
+    average=[]
+    for j in range(len(fractions['sim_0']['frac'])):
+        
+        array=[]
+        for i in range((len(fractions))):
+            
+            array.append(fractions[f'sim_{i}']['frac'][j])
+       
+        average.append(np.average(array))
+
+    inverse=[1/x for x in average]
+    y = np.nan_to_num(inverse, nan=0)
+    plt.plot(centre,y)
+    plt.xlabel('')
+    plt.title('Correction fractions')
+    plt.xlabel('Flux density [mJy]')
+    plt.xscale('log')
+    plt.show()
+
+
+
 
 def angular_distribution(simulation_path,radio_catalogue_fits,fits_image,unresolved_mask,resolved_mask):
 
@@ -1887,7 +2008,6 @@ def angular_distribution(simulation_path,radio_catalogue_fits,fits_image,unresol
 
     bmaj=header['BMAJ']*3600
     bmin=header['BMIN']*3600
-
 
 
     A=1;B=1
@@ -1925,7 +2045,7 @@ def angular_distribution(simulation_path,radio_catalogue_fits,fits_image,unresol
     plt.plot(bins_mid*10**3, median_size, color='red', marker='x', label='Median flux ratio')
     
     #plt.plot( bin_edges,bin_medians,color='purple',marker='D')
-    #import IPython;IPython.embed()
+   
     plt.plot(flux_linspace*10**3,theta_max,color='orange')
     plt.plot(rms_linspace*10**3,theta_min,'--',color='orange')
     plt.scatter(flux*10**3,sizes_resolved,alpha=0.7,s=10)
@@ -2025,7 +2145,7 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
 
         flux_max=np.max(flux)
 
-
+        print('min_flux',flux_min,'max_flux',flux_max)
         Range_x    = np.linspace(start=np.log10(flux_min), stop=np.log10(flux_max), num=2*number_bins+1)
 
         left_bin  = 10 ** Range_x[0:-1:2]
@@ -2036,7 +2156,7 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
         counts=np.zeros(len(left_bin))
         counts_err=np.zeros(len(left_bin))
         
-        Name_Bin_File    = 'fixed_Bins_PYTHON.txt'
+        Name_Bin_File  = 'fixed_Bins_PYTHON.txt'
 
 
         for i in range(len(left_bin)):
@@ -2100,8 +2220,6 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
     SC_catalogue.write('SCS_cat.fits', format='fits', overwrite=True)
 
 
-
-
     real_cat=Table.read(radio_catalogue_fits)
 
     cluster_centre=SkyCoord(str(150), str(2.3), frame='icrs',unit=(u.deg,u.deg))
@@ -2127,7 +2245,7 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
     fig, ax = plt.subplots(1, 1, figsize=(9,7))
     
 
-    radius=1
+    radius=0.7
 
     mask_COSMOS,area=mask_region(COSMOS_cat['ra'],COSMOS_cat['dec'],radius=radius)
     mask_MeerKAT,area = mask_region(real_cat['DEC'],real_cat['DEC'],radius=radius)
@@ -2147,7 +2265,7 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
 
     bins_COSMOS,counts_COSMOS,counts_COSMOS_err=equidistant_bindwidth(flux=COSMOS_flux,number_bins=20,survey_area=area,data_freq=3,counts_freq=1.4, Spectral_Index=-0.7)
 
-    bins_SCS,counts_SCS,counts_SCS_err=equidistant_bindwidth(flux=SCS_cat_flux,number_bins=20,survey_area=area,data_freq=0.325,counts_freq=1.4, Spectral_Index=-0.7)
+    #bins_SCS,counts_SCS,counts_SCS_err=equidistant_bindwidth(flux=SCS_cat_flux,number_bins=20,survey_area=area,data_freq=0.325,counts_freq=1.4, Spectral_Index=-0.7)
 
     #bins_COSMOS_wall,counts_COSMOS_wall,counts_COSMOS_wall_err=equidistant_bindwidth(flux=COSMOS_wall_flux,number_bins=50,survey_area=area,data_freq=3,counts_freq=1.4, Spectral_Index=-0.7)
 
