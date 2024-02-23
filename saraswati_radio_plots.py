@@ -1466,7 +1466,6 @@ def flux_scale_VLASS(output_path,combined_MeerKAT_cat,flux_colname,Pflux_colname
         ref_flux = MeerKAT_cat[flux_colname][mask]*10**3
         ref_flux_err = MeerKAT_cat[e_flux_colname][mask]*10**3
         
-        
 
         def linear_function(x, m, b):
             return m * x + b
@@ -1770,7 +1769,7 @@ def source_size_pdf(theta, S, q=0.62, m=0.3, k=2):
 def get_source_sizes(S, m=0.3, k=2, theta_size=10001, size=1):
 
 
-    S_use = 10.0
+    S_use = 100.0
     theta_med = k*S_use**m
     thetas = np.linspace(theta_med/3, theta_med*3, theta_size)
 
@@ -1782,7 +1781,7 @@ def get_source_sizes(S, m=0.3, k=2, theta_size=10001, size=1):
 
     return theta_sample
 
-def source_count_flux_v2(S,  a0=1.655, a1=-0.1150, a2=0.2272, a3=0.51788, a4=-0.449661, a5=0.160265, a6=-0.028541, a7=0.002041):
+def get_logdNdS25(S,  a0=1.655, a1=-0.1150, a2=0.2272, a3=0.51788, a4=-0.449661, a5=0.160265, a6=-0.028541, a7=0.002041):
     a = np.array([a0, a1, a2, a3, a4, a5, a6, a7])
     ivals = np.arange(len(a))
     vals = np.zeros_like(S)
@@ -1793,8 +1792,8 @@ def source_count_flux_v2(S,  a0=1.655, a1=-0.1150, a2=0.2272, a3=0.51788, a4=-0.
 
 def get_source_fluxes(minf=2*1e-06, maxf=1000.0, numpoints=10000, numsources=10000, a0=1.655, a1=-0.1150, a2=0.2272, a3=0.51788, a4=-0.449661, a5=0.160265, a6=-0.028541, a7=0.002041):
     Sarr = np.geomspace(minf, maxf, numpoints+1)
-    dNdS = 10 ** (source_count_flux_v2(Sarr, a0, a1, a2, a3, a4, a5, a6, a7))
-    flux_prob = dNdS * (Sarr)**(-2.5)
+    dNdSS25 = 10 ** (get_logdNdS25(Sarr, a0, a1, a2, a3, a4, a5, a6, a7))
+    flux_prob = dNdSS25 * (Sarr/1000)**(-2.5)
     Svals = np.random.choice(Sarr, size=numsources, p=flux_prob/flux_prob.sum())
     
     return Svals
@@ -1835,7 +1834,17 @@ def gaussian(xx,yy,xc,yc,re1,re2,S):
     y *= -1. #-((n-yc)/re2)**2
     x_exp = np.exp(x, out=x)
     y_exp = np.exp(y, out=y)
-    return S * x_exp * y_exp
+    return S/(np.pi*re1) * x_exp * y_exp
+
+def constant(xfull, yfull, xc, yc, re, S, xx, yy):
+    flux_map = np.zeros(xx*yy)
+    xnew = xfull - xc
+    ynew = yfull - yc
+    cond = xnew**2 + ynew**2 <= re**2
+    ind = np.where(cond)[0]
+    flux_map[ind] = S / len(ind)
+    return flux_map.reshape(xx, yy)
+
 
 def simulation_image(cluster_name,simulation_path,radio_catalogue_fits,fits_image,res_image,rms_image):
 
@@ -1862,11 +1871,10 @@ def simulation_image(cluster_name,simulation_path,radio_catalogue_fits,fits_imag
     area=np.float64(radius**2*np.pi)
 
 
-
-    # S_use = 100.0
-    # theta_med_use = 1*S_use**0.3
-    # thetas = np.linspace(theta_med_use/3, theta_med_use*3, 10001)
-    # sizes = source_size_dist(thetas, S_use)
+    S_use = 20.0
+    theta_med_use = 2*S_use**0.3
+    thetas = np.linspace(theta_med_use/3, theta_med_use*3, 10001)
+    sizes = source_size_dist(thetas, S_use)
 
     # size_prob = source_size_pdf(thetas, S_use)
     # size_prob /= size_prob.sum()
@@ -1876,15 +1884,15 @@ def simulation_image(cluster_name,simulation_path,radio_catalogue_fits,fits_imag
     # plt.hist(theta_sample)
     # # plt.show()
     
-    # # plt.plot(thetas, sizes)
+    # plt.plot(thetas, sizes)
     # plt.xlabel('theta [arcsec]')
 
     # #plt.ylabel('flux [mJy]')
     # plt.show()
-    
 
 
-    S_min=2000*10e-6
+
+    S_min=2000*3e-6
         
     S_max=1000
     counts_freq=1.4
@@ -1911,7 +1919,9 @@ def simulation_image(cluster_name,simulation_path,radio_catalogue_fits,fits_imag
    
     xx=header['NAXIS1']
     yy=header['NAXIS2']
-
+    x, y = np.arange(xx), np.arange(yy)
+    xx1, yy1 = np.meshgrid(x, y, indexing='ij')
+    xx_use, yy_use = xx1.ravel(), yy1.ravel()
     corrections={}
 
     for j in range(1):
@@ -1936,23 +1946,18 @@ def simulation_image(cluster_name,simulation_path,radio_catalogue_fits,fits_imag
             # flux_sim[i]=flux_dist
             size_sim[i]=re1
 
-            Data+=gaussian(xx,yy,xc,yc,re1,re2,S=flux_sim[i]/10**3)
-
-
-        fits_image=simulation_path+cluster_name+'_simulated_image_'+str(j)+'.fits'
+            new_flux=gaussian(xx,yy,xc,yc,re1,re2,S=flux_sim[i]*0.001)
+            #new_flux = constant(xx_use, yy_use, xc, yc, re1, flux_sim[i]*0.001, xx, yy)
+            Data += new_flux
+            print(rf'source {i} added' )
+        fits_image=simulation_path+cluster_name+'_simulated_image_const'+str(j)+'.fits'
         fits.writeto(fits_image,data=Data,header=header,overwrite=True)
         print(fits_image+ ' ' +'written')
 
-        corrections[j] = {'flux': flux_sim, 'size': size_sim}
+        corrections[j] = {'Total_flux': flux_sim, 'size': size_sim}
     
     pickle.dump(corrections, open('mock_table.pickle', 'wb'))
 
-#    obj = pickle.load(open('corrections_table.pickle', 'rb'))
-
-    # with open('corrections_table.pickle', 'rb') as f:
-    #     obj = pickle.load(f)
-    
-    
 
     S=np.logspace(-1,4,1001)
 
@@ -1975,7 +1980,7 @@ def simulation_image(cluster_name,simulation_path,radio_catalogue_fits,fits_imag
 def simulation_catalog(simulation_path):
     
    
-    images=glob.glob(simulation_path + f'A2631_simulated_image_0.fits' )
+    images=glob.glob(simulation_path + f'A2631_simulated_image_const0.fits' )
 
     images = [image for image in images if '_srl' not in os.path.basename(image)]
 
@@ -1990,6 +1995,61 @@ def simulation_catalog(simulation_path):
         print(image[:-5]+'_srl.fits' + ' catalog written')
 
 
+def simulation_check(simulation_cat,injected_cat):
+    
+    radius=0.7
+    print(simulation_cat)
+    sim_cat=Table.read(simulation_cat)
+
+    mock_cat = pickle.load(open(injected_cat, 'rb'))
+
+    flux_sim=np.sort(sim_cat['Peak_flux'])
+
+    flux_mock=np.sort(mock_cat[0]['Total_flux'])*10**-3
+
+    #breakpoint()
+
+    mask_MeerKAT,area = mask_region(sim_cat['DEC'],sim_cat['DEC'],radius=radius)
+
+    bins_mock,counts_mock,counts_mock_err,x,y=equidistant_bindwidth(flux=flux_mock,survey_area=area,data_freq=1.4,counts_freq=1.4, Spectral_Index=-0.7)
+    bins_sim,counts_sim,counts_sim_err,x,y=equidistant_bindwidth(flux=flux_sim,survey_area=area,data_freq=1.4,counts_freq=1.4, Spectral_Index=-0.7)
+
+    plt.errorbar(bins_mock*10**3, counts_mock,yerr=counts_mock_err,color='orange',label=f'Injected (before source finder)' ,fmt='o')
+    plt.errorbar(bins_sim*10**3, counts_sim,yerr=counts_sim_err,color='red',label='Recovered (after source finder)',fmt='+')
+    S=np.logspace(-2,2,1001)
+    plt.plot(S,10 ** (source_count_flux_v2(S)),label='theory')
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel('Flux S [mJy]',size=12)
+    plt.ylabel('S^(2.5) * dN/dS',size=12)
+    plt.title('Source Counts')
+    plt.legend()
+    plt.show()
+
+    S=np.logspace(-5,0,1001)
+    size_mock=mock_cat[0]['size']
+
+    size_sim=sim_cat['Maj']*3600
+
+    S_use = S
+    theta_med_use = 2*S_use**0.3
+    # thetas = np.linspace(theta_med_use/3, theta_med_use*3, 10001)
+    #sizes = source_size_dist(thetas, S_use)
+
+    plt.scatter(flux_mock,size_mock,label=f'Injected (before source finder)')
+    plt.plot(S_use,theta_med_use,label='theory (Windhorst 1990)')
+    plt.scatter(flux_sim,size_sim,label=f'Recovered (after source finder)')
+    #plt.plot(thetas, sizes)
+    plt.xscale('log')
+
+    plt.ylabel('Theta [arcsec]')
+    plt.xlabel('Flux [mJy]')
+    # plt.xlim(10**-3,10**1)
+    # plt.ylim(10**-3,100)
+    plt.legend()
+    plt.show()
+
+   
 
 
 def completness(simulation_path,radio_catalogue_fits):
@@ -2100,10 +2160,10 @@ def counts_corrections(simulation_path,radio_catalog_fits):
             
             cat=Table.read(sim_cat)
 
-            flux_inj=np.sort(obj[i]['flux']*10**-3)
+            flux_inj=np.sort(obj[i]['Total_flux']*10**-3)
             
             
-            flux_cat = np.sort(cat['Total_flux'] )
+            flux_cat = np.sort(cat['Peak_flux'] )
             try: 
                 
                 subset_cat =  flux_cat[flux_cat>= left_bin[int]]
@@ -2172,87 +2232,7 @@ def counts_corrections(simulation_path,radio_catalog_fits):
 
     return(corrections_file)
 
-
-
-
-def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_counts,Super_CLASS_catalogue_fits,output_path,cluster_name):
-
-
-    def fixed_source_perbin(flux,number_bins,survey_area,counts_freq,data_freq,Spectral_Index):
-         
-        flux = flux * (counts_freq / data_freq) ** Spectral_Index
-        number_sources=len(flux)
-
-        print('total number of sources',number_sources)
-
-        number_per_bin= np.int32(np.ceil(number_sources/number_bins))
-
-        counts=np.zeros(number_bins)
-
-        counts_err=np.zeros(number_bins)
-
-        left_bin_array=np.zeros(number_bins)
-
-        right_bin_array=np.zeros(number_bins)
-
-        bin_centre_array=np.zeros(number_bins)
-
-
-        for i in range(number_bins):
-            Name_Bin_File    = 'Bins_PYTHON.txt'
-            sources=flux[number_per_bin*i:np.min([number_per_bin*(i+1),len(flux)])]
-
-            sources=np.min([len(flux)-number_per_bin,number_per_bin*(i+1)])
-            # mean_flux=np.mean(sources)
-            
-            right_bin=flux[sources]
-
-            left_bin=(flux[number_per_bin*(i)])
-        
-            bin_width = right_bin-left_bin
-
-            subset=(flux >= left_bin) & (flux < right_bin)
-
-            mean_flux=np.mean(flux[subset])
-
-            source_tot0=np.sum(subset)
-
-            source_tot0_err=np.sqrt(np.sum(subset))
-
-            source_tot1=source_tot0/bin_width
-        
-            source_tot2=source_tot1/((survey_area)*(np.pi/180)**2)
-
-            source_norm=source_tot2/mean_flux**(-2.5)
-
-            source_tot1_err=source_tot0_err/bin_width
-        
-            source_tot2_err=source_tot1_err/((survey_area)*(np.pi/180)**2)
-
-            source_norm_err=source_tot2_err/mean_flux**(-2.5)
-
-            left_bin_array[i]=left_bin
-
-            right_bin_array[i]=right_bin
-
-            bin_centre_array[i]=mean_flux
-
-            counts[i]=source_norm
-
-            counts_err[i]=source_norm_err
-        
-       
-        Bin_Data = np.column_stack([left_bin_array, right_bin_array, bin_centre_array])
-        
-        with open(Name_Bin_File, 'w') as Bins:
-            Bins.write('#Left_Edge\t\tRight_Edge\t\tCentre\n')
-            np.savetxt(Bins, Bin_Data)
-        
-    
-        return(bin_centre_array,counts,counts_err)
-
-        
-    def equidistant_bindwidth(flux,survey_area,counts_freq,data_freq, Spectral_Index):
+def equidistant_bindwidth(flux,survey_area,counts_freq,data_freq, Spectral_Index):
 
         flux = flux * (counts_freq / data_freq) ** Spectral_Index
 
@@ -2329,8 +2309,97 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
                 counts_corr[i]=0
             
 
-        return(centre,counts,counts_corr,counts_err,counts_corr_err)
+        return(centre,counts,counts_err,counts_corr,counts_corr_err)
+
+
+def fixed_source_perbin(flux,number_bins,survey_area,counts_freq,data_freq,Spectral_Index):
+         
+        flux = flux * (counts_freq / data_freq) ** Spectral_Index
+        number_sources=len(flux)
+
+        print('total number of sources',number_sources)
+
+        number_per_bin= np.int32(np.ceil(number_sources/number_bins))
+
+        counts=np.zeros(number_bins)
+
+        counts_err=np.zeros(number_bins)
+
+        left_bin_array=np.zeros(number_bins)
+
+        right_bin_array=np.zeros(number_bins)
+
+        bin_centre_array=np.zeros(number_bins)
+
+
+        for i in range(number_bins):
+            Name_Bin_File    = 'Bins_PYTHON.txt'
+            sources=flux[number_per_bin*i:np.min([number_per_bin*(i+1),len(flux)])]
+
+            sources=np.min([len(flux)-number_per_bin,number_per_bin*(i+1)])
+            # mean_flux=np.mean(sources)
+            
+            right_bin=flux[sources]
+
+            left_bin=(flux[number_per_bin*(i)])
         
+            bin_width = right_bin-left_bin
+
+            subset=(flux >= left_bin) & (flux < right_bin)
+
+            mean_flux=np.mean(flux[subset])
+
+            source_tot0=np.sum(subset)
+
+            source_tot0_err=np.sqrt(np.sum(subset))
+
+            source_tot1=source_tot0/bin_width
+        
+            source_tot2=source_tot1/((survey_area)*(np.pi/180)**2)
+
+            source_norm=source_tot2/mean_flux**(-2.5)
+
+            source_tot1_err=source_tot0_err/bin_width
+        
+            source_tot2_err=source_tot1_err/((survey_area)*(np.pi/180)**2)
+
+            source_norm_err=source_tot2_err/mean_flux**(-2.5)
+
+            left_bin_array[i]=left_bin
+
+            right_bin_array[i]=right_bin
+
+            bin_centre_array[i]=mean_flux
+
+            counts[i]=source_norm
+
+            counts_err[i]=source_norm_err
+        
+       
+        Bin_Data = np.column_stack([left_bin_array, right_bin_array, bin_centre_array])
+        
+        with open(Name_Bin_File, 'w') as Bins:
+            Bins.write('#Left_Edge\t\tRight_Edge\t\tCentre\n')
+            np.savetxt(Bins, Bin_Data)
+        
+    
+        return(bin_centre_array,counts,counts_err)
+
+
+def mask_region(ra,dec,radius):
+    
+        centroid_ra = np.mean(ra)
+        centroid_dec = np.mean(dec)
+        
+        mask=np.sqrt((ra-centroid_ra)**2+(dec- centroid_dec)**2) <=radius
+
+        area=radius**2*np.pi
+
+        return(mask,area)
+
+
+def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_counts,Super_CLASS_catalogue_fits,output_path,cluster_name):
+
 
     COSMOS_cat=Table.read(COSMOS_catalogue_fits)
 
@@ -2345,25 +2414,12 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
 
     SC_catalogue.write('SCS_cat.fits', format='fits', overwrite=True)
 
-
     real_cat=Table.read(radio_catalogue_fits)
 
     cluster_centre=SkyCoord(str(150), str(2.3), frame='icrs',unit=(u.deg,u.deg))
 
 
-    def mask_region(ra,dec,radius):
-    
-        centroid_ra = np.mean(ra)
-        centroid_dec = np.mean(dec)
-        
-        mask=np.sqrt((ra-centroid_ra)**2+(dec- centroid_dec)**2) <=radius
 
-        area=radius**2*np.pi
-
-        return(mask,area)
-        
-
-    cluster_centre=SkyCoord(str(150), str(2.3), frame='icrs',unit=(u.deg,u.deg))
     mask_COSMOS_wall=np.sqrt((COSMOS_cat['ra']-cluster_centre.ra.value)**2+(COSMOS_cat['dec']- cluster_centre.dec.value)**2) <=0.3
     COSMOS_wall_cat=COSMOS_cat[mask_COSMOS_wall]
 
@@ -2404,7 +2460,7 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
     
     plt.errorbar(bins_M, counts_M,yerr=counts_M_err,color='orange',label=f'MeerKAT equal bin width of radius = '+str(radius),fmt='o')
 
-    #plt.errorbar(bins_M, counts_M_corr,yerr=counts_M_corr_err,color='blue',label=f'Corrected MeerKAT equal bin width of radius = '+str(radius),fmt='o')
+    plt.errorbar(bins_M, counts_M_corr,yerr=counts_M_corr_err,color='blue',label=f'Corrected MeerKAT equal bin width of radius = '+str(radius),fmt='o')
 
     #plt.errorbar(bins_COSMOS, counts_COSMOS,yerr=counts_COSMOS_err,color='blue',label=' COSMOS equal bin width of radius = '+str(radius),fmt='o')
 
@@ -2422,7 +2478,7 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
     #plt.scatter(S_TLA, N_TLA,marker='x',label='325 MHz GMRT Super-CLASS field')
     ax.set_xscale("log")#, nonposx='clip')
     ax.set_yscale("log")
-    # plt.ylim(10**-3,10**3)
+    plt.xlim(10**-5,10**1)
     # plt.xlim(10**-5,10**-1)
     ax.set_ylabel(r'$S^{2.5}\; dN/dS [Jy^{-1} \, sr^{-1} ]$',fontsize=15)
     ax.set_xlabel('Flux density [Jy]',fontsize=15)
@@ -2431,6 +2487,7 @@ def source_counts(radio_catalogue_fits,COSMOS_catalogue_fits,Super_CLASS_source_
     plt.savefig(output_path+cluster_name+'_source_counts.pdf')
     plt.show()
 
+    
     
     
     
