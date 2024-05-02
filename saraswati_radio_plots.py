@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 from astropy import coordinates as coords
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,7 +18,6 @@ import numpy as np
 import bdsf
 from astropy.stats import SigmaClip
 from astropy.stats import sigma_clipped_stats
-import aplpy
 import re
 from scipy.stats import norm
 from astropy.cosmology import FlatLambdaCDM
@@ -37,6 +36,8 @@ import pickle
 from scipy import interpolate
 from astropy.coordinates import match_coordinates_sky
 from astropy.modeling.models import Gaussian2D
+from astropy.coordinates import StokesCoord
+import astropy.convolution as conv
 
 def write_catalog(fits_files,cluster_name,app_image,int_image):
     
@@ -97,7 +98,6 @@ def plot_image(folder_path,cluster_name,res_image,int_image,tessel_region):
         return(rms)
 
 
-    
     def tessels(region_file):
 
 
@@ -144,7 +144,6 @@ def plot_image(folder_path,cluster_name,res_image,int_image,tessel_region):
     f.show_colorscale(cmap='gray',vmin =(-5*rms),vmax=(30*rms)) # cutouts
 
     #f.show_colorscale(cmap='gray',vmin =(1.0175e-05),vmax=(11e-05),vmid=0.0175e-05,stretch='log')
-    
     
     f.recenter(header['CRVAL1'], header['CRVAL2'], width =1.5,height = 1.5)
     f.add_colorbar()
@@ -357,8 +356,6 @@ def  radio_cutouts(output_path,fits_image_A2631,fits_image_Zwcl2341):
     f.axis_labels.hide_x()
     f.axis_labels.hide_y()
 
-
-
     f= aplpy.FITSFigure(new_fits_image,figure=fig, subplot=[0.05, 0.51, 0.2, 0.2]) 
 
     #f.show_colorscale(cmap='inferno',vmin =0,vmax=0.00005) 
@@ -379,8 +376,6 @@ def  radio_cutouts(output_path,fits_image_A2631,fits_image_Zwcl2341):
     f.axis_labels.hide_y()
 
     
-
-
     f= aplpy.FITSFigure(new_fits_image,figure=fig, subplot=[0.28, 0.51, 0.2, 0.2]) 
 
     #f.show_colorscale(cmap='inferno',vmin =0,vmax=0.00005) 
@@ -445,21 +440,6 @@ def  radio_cutouts(output_path,fits_image_A2631,fits_image_Zwcl2341):
     f.savefig(output_path+'_cutout.pdf')
        # fits.writeto(folder_path+cluster_name+cutout_image, header=header, data=cutout, overwrite=True)
 
-def correct_axes(rms_image):
-
-        data_hdu = fits.open(rms_image)[0]
-        data_data = data_hdu.data
-        data_header = data_hdu.header
-        new_data = data_data[:,:]
-
-        data_header['WCSAXES'] = 2
-        data_header['NAXIS'] = 2
-        del data_header['*3']
-        del data_header['*4']
-        new_fits_image='deleted_axes.fits'
-        w = WCS(data_header)
-        fits.writeto(new_fits_image, header=data_header, data=new_data, overwrite=True)
-        return(new_fits_image,new_data,data_header,w)
 
 def rms_plot(folder_path,cluster_name,fits_image,rms_image):
 
@@ -489,8 +469,6 @@ def rms_plot(folder_path,cluster_name,fits_image,rms_image):
 
         return(rms)
 
-
-    
     
     new_fits_image,new_data,data_header,w=correct_axes(rms_image)
     position = SkyCoord(data_header['CRVAL1']*u.deg, data_header['CRVAL2']*u.deg,frame='fk5',equinox='J2000.0') 
@@ -552,40 +530,35 @@ def correct_axes(fits_image):
        
         data_header['WCSAXES'] = 2
         data_header['NAXIS'] = 2
+        
         del data_header['*3']
         del data_header['*4']
         new_fits_image='deleted_axes.fits'
         w = WCS(data_header)
         fits.writeto(new_fits_image, header=data_header, data=new_data, overwrite=True)
         return(new_fits_image,new_data,data_header,w)
+
 
 def correct_axes_v2(fits_image):
 
         data_hdu = fits.open(fits_image)[0]
         data_data = data_hdu.data
         data_header = data_hdu.header
-        new_data = data_data[:,:]
-       
-        data_header['WCSAXES'] = 2
-        data_header['NAXIS'] = 2
-        del data_header['*3']
-        del data_header['*4']
-        new_fits_image='deleted_axes.fits'
-        w = WCS(data_header)
-        fits.writeto(new_fits_image, header=data_header, data=new_data, overwrite=True)
-        return(new_fits_image,new_data,data_header,w)
-    
-    
+        data_header['BMAJ'] = data_header['BMIN']
+        new_data = data_data[0,0,:,:]
+        w = WCS(fits_image)
 
+        # data_header['WCSAXES'] = 2
+        # data_header['NAXIS'] = 2
+        # del data_header['*3']
+        # del data_header['*4']
+
+        return(new_data,data_header,w)
+    
 
 def cumulative_rms_map(output_path,cluster_name,fits_image):
 
-
-
-
     new_fits_image,new_data,data_header,w=correct_axes(fits_image)
-
-   
 
     data=new_data.flatten()
  
@@ -701,7 +674,6 @@ def resolved_unresolved_sources(output_path,radio_catalog,fits_image):
     x1=res.x[1]
 
 
-    
     y=flux_MeerKAT/peak_MeerKAT
     x=peak_MeerKAT/rms
     curve=1+x0*(x)**(-x1)
@@ -795,7 +767,6 @@ def spectral_distributions(output_path,radio_catalogue_fits):
 
 
 def spectral_index(folder_path,cluster_name,radio_catalog):
-
 
 
     flux_MeerKAT_raw=radio_cat['Total_Flux']*10**3
@@ -1541,7 +1512,6 @@ def angular_distribution(simulation_path,radio_catalogue_fits,fits_image,unresol
     sizes_resolved = np.sqrt(size1 * size2)
 
     sizes_unresolved = np.zeros(len(unresolved_cat['Total_flux']))
-    
 
     theta_N=np.sqrt(bmaj*bmin)
 
@@ -1798,6 +1768,7 @@ def Windhorst(S_use,numsources=100001):
     
 
 def tot_num_sources(Svals,area):
+    
 
     dNdSvals = 10 ** (get_logdNdS25(Svals)) * (Svals/1000)**(-2.5)
 
@@ -1812,25 +1783,10 @@ def tot_num_sources(Svals,area):
     return(number_sources)
 
 
-def get_source_fluxes_rand(minf=2000*1e-06, maxf=1000.0, numpoints=10000, numsources=10000, a0=1.655, a1=-0.1150, a2=0.2272, a3=0.51788, a4=-0.449661, a5=0.160265, a6=-0.028541, a7=0.002041):
 
-    Sarr = np.linspace(minf, maxf, numpoints)
-
-    dNdSS25 = 10 ** (get_logdNdS25(Sarr, a0, a1, a2, a3, a4, a5, a6, a7))
-
-    flux_prob = dNdSS25 * (Sarr/1000)**(-2.5)
-
-    Svals = np.random.choice(Sarr, size=numsources, p=flux_prob/flux_prob.sum())
-    
-    return Svals
-
-
-def get_source_fluxes_uni(Svals, numpoints=10000, a0=1.655, a1=-0.1150, a2=0.2272, a3=0.51788, a4=-0.449661, a5=0.160265, a6=-0.028541, a7=0.002041):
-
+def get_source_fluxes(Svals, numpoints=10000, a0=1.655, a1=-0.1150, a2=0.2272, a3=0.51788, a4=-0.449661, a5=0.160265, a6=-0.028541, a7=0.002041):
 
     dNdSS25 = 10 ** (get_logdNdS25(Svals, a0, a1, a2, a3, a4, a5, a6, a7))
-    
-    #flux_prob = dNdSS25 * (Sarr/1000)**(-2.5)
 
     flux_prob = dNdSS25 * (Svals/1000)**(-2.5)
 
@@ -1847,12 +1803,11 @@ def get_source_fluxes_uni(Svals, numpoints=10000, a0=1.655, a1=-0.1150, a2=0.227
     return flux_samples
 
 
-def get_source_sizes_v2(S, m=0.3, k=2, numpoints=10000, size=1):
-
+def get_source_sizes_v2(S,min_size,max_size, m=0.3, k=2, numpoints=10000, size=1):
 
     theta_med=k*S**m
 
-    thetas = np.linspace(theta_med/3, theta_med*3, numpoints)
+    thetas = np.linspace(min_size, max_size, numpoints)
  
     size_prob = source_size_dist(theta_med,thetas)
 
@@ -1862,57 +1817,82 @@ def get_source_sizes_v2(S, m=0.3, k=2, numpoints=10000, size=1):
 
     inverse_CDF=interpolate.interp1d(CDF,thetas,fill_value="extrapolate")
 
-    # x=np.random.uniform(0, 1, 1)
+    x=np.random.uniform(0, 1, 1)
 
-    # source_size=inverse_CDF(x)
+    source_size=inverse_CDF(x)
 
-    x=np.random.uniform(0, 1, numpoints)
 
-    theta_samples=inverse_CDF(x)
+    # x=np.random.uniform(0, 1, numpoints)
 
-    # plt.hist(theta_samples)
+    # theta_samples=inverse_CDF(x)
 
-    # plt.show()
+    # theta_samples_norm=theta_samples/theta_samples.sum()
 
-    theta_samples_norm=theta_samples/theta_samples.sum()
+    # source_size = np.random.choice(thetas, size=size, p=theta_samples_norm)
 
-    source_size = np.random.choice(thetas, size=size, p=theta_samples_norm)
+    # breakpoint()
 
-    # plt.hist(source_size)
+    # plt.plot(thetas,np.log10(size_prob))
+
+    # plt.title(rf"For a source of flux {S}, median size of {theta_med} has the chosen size of {source_size}")
+
+    # #plt.xlim(0,500)
+
+    # plt.xlabel('Source size arcsec')
+
 
     # plt.show()
 
     return source_size
 
 
-def gaussianv2(xx,yy,A,xc,yc,re):
 
-    x = np.arange(xx, dtype=np.float64)[:, None]
-    y = np.arange(yy, dtype=np.float64)[None, :]
+def gaussianv2(pix_size, A, re):
 
-    gaussian_model = Gaussian2D(amplitude=A, x_mean=xc, y_mean=yc, x_stddev=re, y_stddev=re)
+    sigma = 7
+  
+    size = int(np.round(pix_size * re)*sigma)
 
-    gaussian_source=gaussian_model.evaluate(x,y,amplitude=A, x_mean=xc, y_mean=yc, x_stddev=re, y_stddev=re,theta=0)
+    x = np.arange(0, size, dtype=np.float64)[:, None]
+    y = np.arange(0, size, dtype=np.float64)[None, :]
 
-    return(gaussian_source)
+    gaussian_model = Gaussian2D(amplitude=A, x_mean=size/2, y_mean=size/2, x_stddev=re, y_stddev=re)
+
+    gaussian_source = gaussian_model(x, y)
+
+    return gaussian_source,size
 
 
-def gaussian(xx,yy,xc,yc,re1,re2,S):
+def gaussian2(xx, yy, xc, yc, re1, S):
+    XX, YY = np.meshgrid(np.arange(xx), np.arange(yy))
+    I = np.exp(-((XX - xc)**2 + (YY - yc)**2) / (2 * re**2))
+    normalized_I = I / np.sum(I)
+    return normalized_I * S
+       
+
+def gaussian(xx,yy,xc,yc,re1,S,pix_size):
+
+    sigma = 7
+
+    size = int(np.round(pix_size * re1)*sigma)
 
     x = np.arange(xx, dtype=np.float64)[:, None]
     y = np.arange(yy, dtype=np.float64)[None, :]
     x -= xc
     y -= yc
     x /= re1
-    y /= re2
+    y /= re1
     x **= 2
     y **= 2
-    x *= -1. #-((n-xc)/re1)**2
-    y *= -1. #-((n-yc)/re2)**2
+    x *= -1. #-((x-xc)/re1)**2
+    y *= -1. #-((y-yc)/re2)**2
     x_exp = np.exp(x, out=x)
     y_exp = np.exp(y, out=y)
+    I=x_exp * y_exp
 
-    return S* x_exp * y_exp
+    normalized_I = I / np.sum(I)
+
+    return normalized_I*S
 
 
 def constant(xx_use, yy_use, xc, yc, re1, S, xx, yy):
@@ -1933,27 +1913,36 @@ def constant(xx_use, yy_use, xc, yc, re1, S, xx, yy):
 
 def simulation_image(cluster_name,simulation_path,res_image):
 
-    _,res_data,header,w=correct_axes_v2(res_image)
 
-    header=fits.getheader(res_image)
+    res_data,header,w=correct_axes_v2(res_image)
 
+    padding=2500
 
-    # res_data=fits.open(res_image)[0].data
+    paddiv2=int(padding/2)
 
-    # res_data=res_data[0,0,:,:]
+    original_image = np.zeros((header['NAXIS1'], header['NAXIS2']))
+
+    padded_image= np.zeros((original_image.shape[0]+padding, original_image.shape[1]+padding))
 
     noise=10e-6
 
     mean,stddev=0,noise
 
-    uniform_noise = np.random.normal(mean, stddev, res_data.shape)
+    uniform_noise = np.random.normal(mean, stddev, original_image.shape)
 
+    xx=(paddiv2,paddiv2+original_image.shape[0])
 
-    del header['HISTORY']
+    yy=(paddiv2,paddiv2+original_image.shape[1])
 
     S_min=2000*noise
         
-    S_max=100
+    S_max=1000
+
+    min_size=1
+
+    max_size=1e3
+
+    background=uniform_noise
 
     counts_freq=1.4
     data_freq=0.325
@@ -1969,105 +1958,151 @@ def simulation_image(cluster_name,simulation_path,res_image):
 
     number_sources=  tot_num_sources(Svals,area)
     
-    flux_samples=get_source_fluxes_uni(Svals)
+    flux_samples=   get_source_fluxes(Svals)
 
-    print('min flux', flux_samples.min()*10**-3,'max_flux',flux_samples.max()*10**-3)
+    #print('min flux', flux_samples.min()*10**-3,'max_flux',flux_samples.max()*10**-3)
     
-    xx=header['NAXIS1']
-    yy=header['NAXIS2']
+    pix_size=header['CDELT2']*3600
 
-    x, y = np.arange(xx), np.arange(yy)
-    xx1, yy1 = np.meshgrid(x, y, indexing='ij')
-    xx_use, yy_use = xx1.ravel(), yy1.ravel()
-
-    method='uniform'
-    noise='real'
-    corrections={}
+    noise='uniform'
+    
     BMAJ=header['BMAJ']*3600
     BMIN=header['BMIN']*3600
-    
+
+    convert = 2.0 * np.sqrt(2.0 * np.log(2))
+
+    beam_sigma_x =  BMAJ/ convert/pix_size
+
+    beam,_=gaussianv2(pix_size,1,beam_sigma_x)
+
+    #BMIN=header['BMIN']*3600
+
+    FWHM_TO_AREA = 2*np.pi/(8*np.log(2))
+
+    beam_area=(BMAJ/pix_size)*(BMIN/pix_size)*FWHM_TO_AREA
+
     for j in range(1):
-        Data=0
 
-        #Data=uniform_noise
-
-        Data=res_data
+        Data=np.zeros(padded_image.shape)
 
         flux_sim=np.zeros(number_sources)
         Pflux_sim=np.zeros(number_sources)
+
+        Maj=np.zeros(number_sources)
+        Min=np.zeros(number_sources)
+        inst_size=np.zeros(number_sources)
+
         size_sim=np.zeros(number_sources)
 
         RA=np.zeros(number_sources)
         DEC=np.zeros(number_sources)
-  
+
         for i in range(number_sources):
 
-            xc=np.random.randint(1,xx)
-            yc=np.random.randint(1,yy)
-
-            print(flux_samples[i])
-
-            Total_flux=flux_samples[i]*10**-3 #Jy
-
-            print(Total_flux)
-
-            re1=get_source_sizes_v2( Total_flux*10**3)
-        
-            re2=re1
-
-            MAJ=np.sqrt(re1**2+BMAJ**2)
-            MIN=MAJ
-
-            area_beam=BMAJ*BMIN
-            area_source=MAJ*MIN
+            xc=np.random.randint(xx[0],xx[1])
+            yc=np.random.randint(yy[0],yy[1])
             
-            A=(Total_flux)*(area_beam/area_source)
+            Total_flux= flux_samples[i]*10**-3 #Jy
+
+            re1_fwhm=get_source_sizes_v2( Total_flux*10**3,min_size=min_size,max_size=max_size) #/(2*np.sqrt(2*np.log(2)))
+
+            re1_sigma=re1_fwhm/(2*np.sqrt(2*np.log(2)))
+
+            MAJ=np.sqrt(re1_fwhm**2+BMAJ**2)
+
+            MIN=np.sqrt(re1_fwhm**2+BMIN**2)
+
+            area_beam=(BMAJ/pix_size)*(BMIN/pix_size)*FWHM_TO_AREA
+
+            area_source=(MAJ/pix_size)*(MIN/pix_size)*FWHM_TO_AREA
+            
+            #point sources
+
+            if area_source <= area_beam:
+                 A = Total_flux
+                 MAJ=BMAJ
+                 MIN=BMIN
+                 re1_sigma=1
+            elif area_source < 0:
+                 area_source=0
+                 MAJ=0
+                 MIN=0
+                 re1_sigma=0
+            else:
+                 A=Total_flux*(area_beam/area_source)
+
+            #A=A/beam_area
 
             Pflux_sim[i]=A
+            Maj[i]=MAJ/3600
+            Min[i]=MIN/3600
             flux_sim[i]=Total_flux #Jy
-            size_sim[i]=area_source
+            size_sim[i]=area_source #deg
 
-            xc_deg, yc_deg = w.wcs_pix2world(xc, yc,1)
+            new_flux=gaussian2(xx, yy, xc, yc, re1, Total_flux)
+         
+            #gaussian,size=gaussianv2(pix_size,A,re1_sigma)
 
+            x1=int(xc-(gaussian.shape[0]/2))
+            x2=int(xc+(gaussian.shape[0]/2))
+
+            y1=int(yc-(gaussian.shape[1]/2))
+            y2=int(yc+(gaussian.shape[1]/2))
+
+            convolve_source= conv.convolve(gaussian,beam, normalize_kernel=True)
+           
+            Data[x1:x2,y1:y2] +=new_flux
+
+            xc, yc=xc-padding/2, yc-padding/2   
+           
+            aux_deg = w.pixel_to_world(yc, xc, 1,StokesCoord(1))[0]
+            xc_deg, yc_deg = aux_deg.ra.value, aux_deg.dec.value
+            
+            print(xc,yc)
+            print(xc_deg,yc_deg)
+          
             RA[i]=xc_deg
             DEC[i]=yc_deg
+        
+            print('Source ' + str(i) + ' written')
+            # plt.imshow(Data[a1:b1,c1:d1])
 
-    
-            new_flux=gaussian(xx,yy,xc,yc,re1,re2,S=A)
-             
-            #new_flux=gaussianv2(xx,yy,A,xc,yc,re1)
-    
-            #new_flux = constant(xx_use, yy_use, xc, yc, re1, Total_flux,xx,yy)
+            # plt.show()
+            #Data[y_min:y_max, x_min:x_max] += gaussian
 
-            Data += new_flux
-            print(rf'source {i} added' )
-        sim_image=simulation_path+cluster_name+'_simulated_image_'+str(method)+'_'+str(noise)+'.fits'
-        fits.writeto(sim_image,data=Data,header=header,overwrite=True)
+        final_image=Data[paddiv2:-paddiv2,paddiv2:-paddiv2]
+
+        sim_image=simulation_path+cluster_name+'_simulated_image_'+str(noise)+'.fits'
+
+        fits.writeto(sim_image,data=final_image+background,header=header,overwrite=True)
+
         print(sim_image+ ' ' +'written')
 
-        corrections[j] = {'Total_flux': flux_sim,'Peak_flux': Pflux_sim, 'size': size_sim,'RA': RA,'DEC':DEC}
+       #corrections[j] = {'Total_flux': flux_sim,'Peak_flux': Pflux_sim, 'size': size_sim,'RA': RA,'DEC':DEC,'Maj':Maj,'Min':Min}
 
-    inj_cat=simulation_path+cluster_name+'_mock_table_'+method+'_'+noise+'.pickle'
+    col1 = fits.Column(name='Total_flux_inj', format='D',array=flux_sim)
+    col2 = fits.Column(name='Peak_flux_inj', format='D',array=Pflux_sim)
+    col3 = fits.Column(name='size_inj', format='D',array=size_sim)
+    col4 = fits.Column(name='RA_inj', format='D',array=RA)
+    col5 = fits.Column(name='DEC_inj', format='D',array=DEC)
+    col6 = fits.Column(name='Maj_inj', format='D',array=Maj)
+    col7 = fits.Column(name='Min_inj', format='D',array=Min)
+    hdu = fits.BinTableHDU.from_columns([col1, col2, col3, col4, col5, col6, col7])
+ 
+    inj_cat=simulation_path+cluster_name+'_injected_cat.fits'
+
+    hdu.writeto(inj_cat,overwrite=True)
     
-    pickle.dump(corrections, open(inj_cat, 'wb'))
+    # pickle.dump(corrections, open(inj_cat, 'wb'))
+    # with open(inj_cat, 'rb') as f:
+    # mock_cat = pickle.load(f)
+    # table = Table(mock_cat[0])
+   
+    # fits_file = simulation_path+cluster_name+'_injected_cat.fits'
 
-    with open(inj_cat, 'rb') as f:
-        mock_cat = pickle.load(f)
+    # table.write(fits_file, format='fits', overwrite=True)
 
-    table = Table(mock_cat[0])
-
-    # Print the table to see its structure
-    print(table)
-
-    fits_file = simulation_path+cluster_name+'_injected_cat.fits'
-
-    table.write(fits_file, format='fits', overwrite=True)
-
-    inj_cat=fits_file
-
-    print("Astropy table created and written to:", fits_file)
-
-    return(sim_image,inj_cat)
+    return sim_image,inj_cat
 
 
 def simulation_catalog(sim_image):
@@ -2080,107 +2115,145 @@ def simulation_catalog(sim_image):
                 detection_image=image,interactive=False ,clobber=True,spectralindex_do = False,atrous_do = False)
     
     output_cat=image[:-5]+'_srl.fits'
+
     img.write_catalog(outfile=output_cat,format='fits', catalog_type='srl',clobber=True)
+
     print(output_cat + ' catalog written')
 
     return(output_cat)
 
-     
-     
-def simulation_check(simulation_cat,injected_cat):
 
+
+def simulation_check(inject_cat,recov_cat):
 
     radius=0.7
 
-    print(simulation_cat)
+    inj_cat = Table.read(inject_cat)
 
-    sim_cat=Table.read(simulation_cat)
+    rec_cat = Table.read(recov_cat)
 
-    mock_cat = Table.read(injected_cat)
+    RA_inj=inj_cat['RA_inj']
 
-    RA_cat=np.array(sim_cat['RA'])+360
+    DEC_inj=inj_cat['DEC_inj']
 
-    DEC_cat=np.array(sim_cat['DEC'])
+    RA_rec=rec_cat['RA']+360
 
-    flux_sim=sim_cat['Total_flux']
+    DEC_rec=rec_cat['DEC']
 
-    flux_mock=mock_cat['Total_flux'] 
+    c1=SkyCoord(ra=RA_inj*u.degree, dec=DEC_inj*u.degree)
 
-    RA_mock=mock_cat['RA']+360
+    c2=SkyCoord(ra=RA_rec, dec=DEC_rec)
 
-    DEC_mock=mock_cat['DEC']
+    idx,d2d,_=match_coordinates_sky(c2,c1) #c2.match_to_catalog_sky(c1)
 
-    breakpoint()
+    max_sep = 5 * u.arcsec
 
-    plt.scatter(RA_mock,DEC_mock)
+    matches_within_4_arcsec = d2d < max_sep
+    matched_indices_c1 = idx[matches_within_4_arcsec]
+  
+    matched_c2 = c2[matches_within_4_arcsec]#np.where(matches_within_4_arcsec)[0]
 
-    plt.scatter(RA_cat,DEC_cat)
+    # Extract matched coordinates
+    matched_c1 = c1[matched_indices_c1]
 
 
-    plt.show()
+    print('Injected catalog length',len(c1 ))
 
+    print('Rrecovered catalog length',len(c2 ))
 
-    c1 = SkyCoord(ra=RA_cat*u.degree, dec=DEC_cat*u.degree)
+    print('Merged catalog length',len(matched_c1 ))
 
-    c2 = SkyCoord(ra=RA_mock*u.degree, dec=DEC_mock*u.degree)
+    inj_cat = inj_cat[matched_indices_c1]
 
-    idx, d2d, d3d = match_coordinates_sky(c1, c2)
+    rec_cat = rec_cat[matches_within_4_arcsec]
 
-    idx, d2d, d3d = c1.match_to_catalog_3d(c2)
+    Maj_inj=inj_cat['Maj_inj']
 
-    max_sep = 1.0 * u.arcsec
+    Maj_rec=rec_cat['Maj']
 
-    sep_constraint = d2d < max_sep
+    Flux_inj=inj_cat['Total_flux_inj']
 
-    c_matches = c1[sep_constraint]
+    Flux_rec=rec_cat['Total_flux']
 
-    catalog_matches = c2[idx[sep_constraint]]
+    Peak_inj=inj_cat['Peak_flux_inj']
 
-    flux_mock=flux_mock[idx]
+    Peak_rec=rec_cat['Peak_flux']
 
-    RA_mock,DEC_mock=RA_mock[idx],DEC_mock[idx]
+  
+    # plt.hist(np.log10(Maj_rec),label='Recovered PybDSF',bins=20,alpha=0.5)
 
-    continuum=flux_sim-flux_mock
+    # plt.hist(np.log10(Maj_inj),label='Injected Windhorst',bins=20,alpha=0.5)
 
-    plt.hist(continuum,bins=50,range=(-0.0005,0.0005))
+    #plt.xlabel('log Major axis')
 
-    plt.xlabel('Recovered - Injected (Flux [Jy])')
+    #plt.legend()
 
-    plt.show()
+    plt.scatter(Maj_rec,Maj_inj,s=3,alpha=0.7)
 
-    plt.scatter(RA_mock,DEC_mock,label='injected_sources',s=5)
-
-    plt.scatter(RA_cat,DEC_cat,label='recovered_sources',s=5)
-
-    plt.legend()
-
-    plt.show()
-
-    plt.scatter(flux_mock,flux_sim,s=8)
+    plt.plot(Maj_rec,Maj_rec)
 
     plt.xscale('log')
+
     plt.yscale('log')
-    # plt.xlim(10**-5,1)
-    # plt.ylim(10**-5,1)
-    plt.plot(flux_mock,flux_mock,markersize=12,color='black')
-    plt.xlabel('Injected Total fluxes [Jy]',fontsize=13)
-    plt.ylabel('Recovered Total fluxes [Jy]',fontsize=13)
+
+    plt.xlabel('log Major axis rec')
+
+    plt.ylabel('log Major axis inj')
+
+    plt.xlim(0,0.012)
+
+    plt.ylim(0,0.012)
 
     plt.show()
 
-    print('Flux min, max injected',flux_mock.min(),flux_mock.max())
-    print('Flux min, max recovered',flux_sim.min(),flux_sim.max())
+    # plt.hist(np.log10(Flux_rec),label='Recovered PybDSF',bins=20,alpha=0.5)
+
+    # plt.hist(np.log10(Flux_inj),label='Injected Windhorst',bins=20,alpha=0.5)
+
+    # plt.xlabel('log Total flux')
+
+    # plt.legend()
+
+    plt.scatter(Flux_rec,Flux_inj,s=3,alpha=0.7)
+
+    plt.plot(Flux_rec,Flux_rec)
+
+    plt.xscale('log')
+
+    plt.yscale('log')
+
+    plt.xlabel('log Total flux rec')
+
+    plt.ylabel('log Tota flux inj')
+
+    plt.show()
+
+    plt.scatter(Peak_rec,Peak_inj,s=3,alpha=0.7)
+
+    plt.plot(Peak_rec,Peak_rec)
+
+    plt.xscale('log')
+
+    plt.yscale('log')
+
+    plt.xlabel('log Peak flux rec')
+
+    plt.ylabel('log Peak flux inj')
+
+    plt.show()
 
 
-    mask_MeerKAT,area = mask_region(sim_cat['RA'],sim_cat['DEC'],radius=radius)
 
-    bins_mock,counts_mock,counts_mock_err=equidistant_bindwidth(flux=flux_mock,survey_area=1,data_freq=1.4,counts_freq=1.4, Spectral_Index=-0.7,nbins=20)
-    bins_sim,counts_sim,counts_sim_err=    equidistant_bindwidth(flux=flux_sim,survey_area=1,data_freq=1.4,counts_freq=1.4, Spectral_Index=-0.7,nbins=20)
-   
-    plt.errorbar(bins_mock*10**3, counts_mock,yerr=counts_mock_err,color='orange',label=f'Injected (before source finder)' ,fmt='o')
-    plt.errorbar(bins_sim*10**3, counts_sim,yerr=counts_sim_err,color='red',label='Recovered (after source finder)',fmt='+')
+    print('Flux min, max injected',Flux_inj.min(),Flux_inj.max())
+    print('Flux min, max recovered',Flux_rec.min(),Flux_rec.max())
 
-    S=np.logspace(-2,3,10001)
+    bins_mock,counts_mock,counts_mock_err=equidistant_bindwidth(flux=Flux_inj,survey_area=1,data_freq=1.4,counts_freq=1.4, Spectral_Index=-0.7,nbins=20)
+    bins_sim,counts_sim,counts_sim_err   =equidistant_bindwidth(flux=Flux_rec,survey_area=1,data_freq=1.4,counts_freq=1.4, Spectral_Index=-0.7,nbins=20)
+
+    plt.errorbar(bins_mock*10**3, counts_mock,yerr=counts_mock_err,color='red',label='Recovered (after source finder)',fmt='+')
+    plt.errorbar(bins_sim*10**3, counts_sim,yerr=counts_sim_err,color='orange',label=f'Injected (before source finder)' ,fmt='o')
+    
+    S=np.logspace(-2,2,10001)
 
     plt.plot(S,10 ** (get_logdNdS25(S)),label='theory')
     plt.xscale('log')
@@ -2191,6 +2264,91 @@ def simulation_check(simulation_cat,injected_cat):
     plt.title('Source Counts')
     plt.legend()
     plt.show()
+    plt.close()
+
+
+     
+# def simulation_check(simulation_cat,injected_cat,sim_image):
+
+
+#     header=fits.getheader(sim_image)
+
+#     BMAJ=header['BMAJ']*3600
+#     BMIN=header['BMIN']*3600
+
+#     radius=0.7
+
+#     print(simulation_cat)
+
+#     sim_cat = Table.read(simulation_cat)
+
+#     mock_cat = Table.read(injected_cat)
+
+#     RA_cat=np.array(sim_cat['RA']+360)
+
+#     DEC_cat=np.array(sim_cat['DEC'])
+
+
+#     flux_sim=sim_cat['Total_flux']#*(BMAJ)*(BMIN)
+
+#     flux_mock=mock_cat['Total_flux'] 
+
+#     RA_mock=mock_cat['RA']+360
+
+#     DEC_mock=mock_cat['DEC']
+
+#     MAJ_mock=mock_cat['MAJ']
+
+#     MAJ_cat=sim_cat['Maj']*3600
+
+#     plt.hist(np.log10(MAJ_mock),bins=20,label='injected sources',alpha=0.7)
+
+#     plt.hist(np.log10(MAJ_cat),bins=20,label='recovered sources',alpha=0.7)
+
+#     plt.xlabel('log Major axes [arcsec]',size=12)
+
+#     plt.ylabel('Frequency',size=12)
+
+#     plt.legend()
+
+#     plt.show()
+
+#     plt.hist(np.log10(flux_sim),bins=20,label='recovered sources',alpha=0.7)
+
+#     plt.hist(np.log10(flux_mock),bins=20,label='injected sources',alpha=0.7)
+
+#     plt.xlabel('Total flux [Jy]',size=12)
+
+#     plt.ylabel('Frequency',size=12)
+
+#     plt.legend()
+
+#     plt.show()
+
+#     print('Flux min, max injected',flux_mock.min(),flux_mock.max())
+#     print('Flux min, max recovered',flux_sim.min(),flux_sim.max())
+
+
+#     mask_MeerKAT,area = mask_region(sim_cat['RA'],sim_cat['DEC'],radius=radius)
+
+#     bins_mock,counts_mock,counts_mock_err=equidistant_bindwidth(flux=flux_mock,survey_area=1,data_freq=1.4,counts_freq=1.4, Spectral_Index=-0.7,nbins=20)
+#     bins_sim,counts_sim,counts_sim_err   =equidistant_bindwidth(flux=flux_sim,survey_area=1,data_freq=1.4,counts_freq=1.4, Spectral_Index=-0.7,nbins=20)
+   
+#     plt.errorbar(bins_mock*10**3, counts_mock,yerr=counts_mock_err,color='orange',label=f'Injected (before source finder)' ,fmt='o')
+#     plt.errorbar(bins_sim*10**3, counts_sim,yerr=counts_sim_err,color='red',label='Recovered (after source finder)',fmt='+')
+  
+
+#     S=np.logspace(-2,2,10001)
+
+#     plt.plot(S,10 ** (get_logdNdS25(S)),label='theory')
+#     plt.xscale('log')
+#     plt.yscale('log')
+#     plt.xlabel('Flux S [mJy]',size=12)
+#     plt.ylabel('S^(2.5) * dN/dS',size=12)
+   
+#     plt.title('Source Counts')
+#     plt.legend()
+#     plt.show()
 
     # S=np.logspace(-5,0,1001)
     # size_mock=mock_cat[0]['size']
@@ -2225,11 +2383,10 @@ def completness(simulation_path,radio_catalogue_fits):
     flux_real=real_cat['Total_flux']
 
     min_flux=flux_real.min()
+    
     max_flux=flux_real.max()
 
-
     intervals=np.logspace(-6,5,50)
-
 
     fractions={}
     fig, ax = plt.subplots(1, 1, figsize=(6,6))
@@ -2277,6 +2434,7 @@ def completness(simulation_path,radio_catalogue_fits):
 
 
 def equidistant_bindwidth(flux,survey_area,counts_freq,data_freq, Spectral_Index,nbins):
+        
 
         flux = flux * (counts_freq / data_freq) ** Spectral_Index
 
